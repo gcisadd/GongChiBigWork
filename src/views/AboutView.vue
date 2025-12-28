@@ -65,14 +65,16 @@
 
 <script setup lang="ts">
 import { Lock, User } from '@element-plus/icons-vue'
-import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
+import { type FormInstance, type FormRules } from 'element-plus'
 import { reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 /**
  * 登录页面组件
  *
  * 提供用户登录功能，包含用户名和密码输入、表单验证、登录提交等功能
  * 使用 Element Plus 组件库构建美观的登录界面
+ * 登录成功后跳转到表格页面
  *
  * @component
  */
@@ -90,6 +92,9 @@ interface LoginForm {
   password: string
   remember: boolean
 }
+
+// 路由实例，用于页面跳转
+const router = useRouter()
 
 // 表单引用对象，用于表单验证和重置
 const loginFormRef = ref<FormInstance>()
@@ -130,10 +135,9 @@ const loginRules: FormRules<LoginForm> = {
  * @input 用户点击登录按钮或按回车键
  * @process 1. 验证表单字段是否符合规则
  *          2. 如果验证通过，设置加载状态为 true
- *          3. 模拟登录请求（实际项目中应调用 API）
- *          4. 根据登录结果显示成功或失败消息
- *          5. 如果选择记住我，保存登录状态
- * @output 显示登录结果消息，可能跳转到其他页面
+ *          3. 登录逻辑暂时留空（后续可添加实际登录 API 调用）
+ *          4. 跳转到表格页面
+ * @output 跳转到表格页面
  */
 const handleLogin = async () => {
   if (!loginFormRef.value) return
@@ -143,43 +147,29 @@ const handleLogin = async () => {
     if (valid) {
       loading.value = true
 
-      // 模拟登录请求（实际项目中应替换为真实的 API 调用）
+      // 登录逻辑暂时留空，直接跳转到表格页
       setTimeout(() => {
         loading.value = false
-
-        // 这里可以添加实际的登录逻辑
-        // 例如：调用登录 API，保存 token 等
-        if (loginForm.username && loginForm.password) {
-          ElMessage.success('登录成功！')
-
-          // 如果选择记住我，可以保存到 localStorage
-          if (loginForm.remember) {
-            localStorage.setItem('rememberLogin', 'true')
-            localStorage.setItem('username', loginForm.username)
-          }
-
-          // 登录成功后可以跳转到首页或其他页面
-          // router.push('/')
-        } else {
-          ElMessage.error('登录失败，请检查用户名和密码')
-        }
-      }, 1000)
-    } else {
-      ElMessage.warning('请填写完整的登录信息')
+        // 跳转到表格页面
+        router.push('/table')
+      }, 500)
     }
   })
 }
 </script>
 
 <style scoped>
-/* 登录容器样式 - 居中显示登录卡片 */
+/* 登录容器样式 - 全屏居中显示登录卡片 */
 .login-container {
-  min-height: 100vh;
+  width: 100vw;
+  height: 100vh;
   display: flex;
   justify-content: center;
   align-items: center;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding: 20px;
+  box-sizing: border-box;
+  margin: 0;
 }
 
 /* 登录卡片样式 */
