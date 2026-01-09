@@ -1,18 +1,42 @@
 <template>
   <div class="table-container">
+    <!-- 使用 Element Plus Container 布局组件 -->
+    <el-container class="layout-container">
+      <!-- 左侧导航栏区域 -->
+      <el-aside width="200px" class="aside-container">
+        <el-menu
+          :default-active="activeMenu"
+          class="aside-menu"
+          router
+          @select="handleMenuSelect"
+        >
+          <!-- 导航菜单项 -->
+          <el-menu-item index="/table">
+            <el-icon><Document /></el-icon>
+            <span>文档列表</span>
+          </el-menu-item>
+          <el-menu-item index="/about">
+            <el-icon><User /></el-icon>
+            <span>关于</span>
+          </el-menu-item>
+        </el-menu>
+      </el-aside>
+
+      <!-- 右侧主内容区域 -->
+      <el-main class="main-container">
     <!-- 表格页面标题 -->
     <el-card class="table-card" shadow="always">
       <template #header>
         <div class="card-header">
-          <h2>数据表格</h2>
+          <h2>文档列表</h2>
+          <el-button type="primary" :icon="Plus" @click="handleAdd">新建文档</el-button>
         </div>
       </template>
 
       <!-- 表格操作栏 -->
       <div class="table-toolbar">
-        <el-button type="primary" :icon="Plus" @click="handleAdd">新增</el-button>
         <el-button type="danger" :icon="Delete" :disabled="selectedRows.length === 0" @click="handleDelete">
-          删除
+          批量删除
         </el-button>
         <el-button type="success" :icon="Refresh" @click="handleRefresh">刷新</el-button>
       </div>
@@ -20,21 +44,40 @@
       <!-- 数据表格 -->
       <el-table
         :data="tableData"
+        class="document-table"
         style="width: 100%"
         border
         stripe
+        size="large"
         @selection-change="handleSelectionChange"
       >
-        <el-table-column type="selection" width="55" />
-        <el-table-column type="index" label="序号" width="60" />
-        <el-table-column prop="name" label="姓名" width="120" />
-        <el-table-column prop="age" label="年龄" width="80" />
-        <el-table-column prop="email" label="邮箱" width="200" />
-        <el-table-column prop="address" label="地址" />
-        <el-table-column label="操作" width="180" fixed="right">
+        <!-- 选择列：适当减小固定宽度，避免占用过多空间 -->
+        <el-table-column type="selection" width="60" />
+        <!-- 其余列使用 min-width，由表格自动按剩余空间等比拉伸，铺满整行 -->
+        <el-table-column prop="id" label="文档ID" min-width="100" />
+        <el-table-column prop="title" label="文档名" min-width="200" />
+        <el-table-column prop="creator" label="创建者" min-width="150" />
+        <el-table-column prop="modifiedTime" label="修改时间" min-width="200" />
+        <el-table-column label="操作" min-width="180" fixed="right">
           <template #default="scope">
-            <el-button type="primary" size="small" :icon="Edit" @click="handleEdit(scope.row)">编辑</el-button>
-            <el-button type="danger" size="small" :icon="Delete" @click="handleDeleteRow(scope.row)">删除</el-button>
+            <el-button
+              type="primary"
+              size="large"
+              :icon="Edit"
+              class="action-button"
+              @click="handleEdit(scope.row)"
+            >
+              编辑
+            </el-button>
+            <el-button
+              type="danger"
+              size="large"
+              :icon="Delete"
+              class="action-button"
+              @click="handleDeleteRow(scope.row)"
+            >
+              删除
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -52,46 +95,52 @@
         />
       </div>
     </el-card>
+      </el-main>
+    </el-container>
   </div>
 </template>
 
 <script setup lang="ts">
-import { Delete, Edit, Plus, Refresh } from '@element-plus/icons-vue'
+import { Delete, Document, Edit, Plus, Refresh, User } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { onMounted, ref } from 'vue'
-
+import { useRoute } from 'vue-router'
 /**
- * 表格页面组件
+ * 文档列表页面组件
  *
- * 提供数据表格展示功能，包含数据列表、分页、新增、编辑、删除等操作
- * 使用 Element Plus 表格组件构建功能完善的数据管理界面
+ * 提供文档列表展示功能，包含文档列表、分页、新建、编辑、删除等操作
+ * 使用 Element Plus Container 组件构建左右布局，左侧为导航栏，右侧为文档列表内容区域
  *
  * @component
  */
 
 /**
- * 表格数据接口
+ * 文档数据接口
  *
- * @interface TableRow
- * @property {number} id - 数据ID
- * @property {string} name - 姓名
- * @property {number} age - 年龄
- * @property {string} email - 邮箱
- * @property {string} address - 地址
+ * @interface DocumentRow
+ * @property {number} id - 文档ID
+ * @property {string} title - 文档名
+ * @property {string} creator - 创建者
+ * @property {string} modifiedTime - 修改时间
  */
-interface TableRow {
+interface DocumentRow {
   id: number
-  name: string
-  age: number
-  email: string
-  address: string
+  title: string
+  creator: string
+  modifiedTime: string
 }
 
-// 表格数据
-const tableData = ref<TableRow[]>([])
+// 路由实例，用于获取当前路由路径
+const route = useRoute()
+
+// 当前激活的菜单项
+const activeMenu = ref('/table')
+
+// 文档列表数据
+const tableData = ref<DocumentRow[]>([])
 
 // 选中的行数据
-const selectedRows = ref<TableRow[]>([])
+const selectedRows = ref<DocumentRow[]>([])
 
 // 当前页码
 const currentPage = ref(1)
@@ -103,24 +152,47 @@ const pageSize = ref(10)
 const total = ref(0)
 
 /**
- * 初始化表格数据
+ * 格式化日期时间
+ *
+ * @input 日期对象
+ * @process 1. 将日期对象格式化为 YYYY-MM-DD HH:mm:ss 格式
+ * @output 格式化后的日期时间字符串
+ */
+const formatDateTime = (date: Date): string => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  const seconds = String(date.getSeconds()).padStart(2, '0')
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+}
+
+/**
+ * 初始化文档列表数据
  *
  * @input 组件挂载时触发
- * @process 1. 生成模拟数据
+ * @process 1. 生成模拟文档数据
  *          2. 设置数据总数
  *          3. 更新表格显示
- * @output 填充表格数据
+ * @output 填充文档列表数据
  */
 const initTableData = () => {
-  // 模拟数据生成
-  const mockData: TableRow[] = []
+  // 模拟文档数据生成
+  const mockData: DocumentRow[] = []
+  const creators = ['张三', '李四', '王五', '赵六', '钱七', '孙八', '周九', '吴十']
+
   for (let i = 1; i <= 50; i++) {
+    // 生成随机的修改时间（最近30天内）
+    const now = new Date()
+    const daysAgo = Math.floor(Math.random() * 30)
+    const modifiedDate = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000)
+
     mockData.push({
       id: i,
-      name: `用户${i}`,
-      age: 20 + Math.floor(Math.random() * 40),
-      email: `user${i}@example.com`,
-      address: `地址${i}号`,
+      title: `文档${i}_示例文档标题`,
+      creator: creators[Math.floor(Math.random() * creators.length)] || '未知',
+      modifiedTime: formatDateTime(modifiedDate),
     })
   }
   tableData.value = mockData
@@ -135,38 +207,38 @@ const initTableData = () => {
  *          2. 更新选中行数组
  * @output 更新 selectedRows 数组
  */
-const handleSelectionChange = (selection: TableRow[]) => {
+const handleSelectionChange = (selection: DocumentRow[]) => {
   selectedRows.value = selection
 }
 
 /**
- * 处理新增操作
+ * 处理新建文档操作
  *
- * @input 用户点击新增按钮
+ * @input 用户点击新建文档按钮
  * @process 1. 显示提示信息
- *          2. 后续可打开新增对话框
+ *          2. 后续可打开新建文档对话框或跳转到编辑器
  * @output 显示提示消息
  */
 const handleAdd = () => {
-  ElMessage.info('新增功能待实现')
-  // 后续可以打开新增对话框
+  ElMessage.info('新建文档功能待实现，后续将跳转到文本编辑器')
+  // 后续可以打开新建文档对话框或跳转到编辑器
   // dialogVisible.value = true
+  // 或 router.push('/editor')
 }
 
 /**
- * 处理编辑操作
+ * 处理编辑文档操作
  *
  * @input 用户点击编辑按钮
- * @process 1. 获取当前行数据
+ * @process 1. 获取当前文档数据
  *          2. 显示提示信息
- *          3. 后续可打开编辑对话框
+ *          3. 后续可跳转到文本编辑器编辑该文档（跳转功能暂不实现）
  * @output 显示提示消息
  */
-const handleEdit = (row: TableRow) => {
-  ElMessage.info(`编辑用户：${row.name}`)
-  // 后续可以打开编辑对话框
-  // editDialogVisible.value = true
-  // editForm.value = { ...row }
+const handleEdit = (row: DocumentRow) => {
+  ElMessage.info(`编辑文档：${row.title}（跳转功能待实现）`)
+  // 后续可以跳转到文本编辑器编辑该文档
+  // router.push(`/editor/${row.id}`)
 }
 
 /**
@@ -174,13 +246,13 @@ const handleEdit = (row: TableRow) => {
  *
  * @input 用户点击删除按钮
  * @process 1. 确认删除操作
- *          2. 从表格数据中移除该行
+ *          2. 从文档列表中移除该文档
  *          3. 更新数据总数
- * @output 更新表格数据，显示成功消息
+ * @output 更新文档列表数据，显示成功消息
  */
-const handleDeleteRow = async (row: TableRow) => {
+const handleDeleteRow = async (row: DocumentRow) => {
   try {
-    await ElMessageBox.confirm(`确定要删除用户 "${row.name}" 吗？`, '提示', {
+    await ElMessageBox.confirm(`确定要删除文档 "${row.title}" 吗？`, '提示', {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
       type: 'warning',
@@ -202,18 +274,18 @@ const handleDeleteRow = async (row: TableRow) => {
  *
  * @input 用户点击批量删除按钮
  * @process 1. 确认删除操作
- *          2. 从表格数据中移除选中的行
+ *          2. 从文档列表中移除选中的文档
  *          3. 更新数据总数
- * @output 更新表格数据，显示成功消息
+ * @output 更新文档列表数据，显示成功消息
  */
 const handleDelete = async () => {
   if (selectedRows.value.length === 0) {
-    ElMessage.warning('请选择要删除的数据')
+    ElMessage.warning('请选择要删除的文档')
     return
   }
 
   try {
-    await ElMessageBox.confirm(`确定要删除选中的 ${selectedRows.value.length} 条数据吗？`, '提示', {
+    await ElMessageBox.confirm(`确定要删除选中的 ${selectedRows.value.length} 个文档吗？`, '提示', {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
       type: 'warning',
@@ -233,9 +305,9 @@ const handleDelete = async () => {
  * 处理刷新操作
  *
  * @input 用户点击刷新按钮
- * @process 1. 重新初始化表格数据
+ * @process 1. 重新初始化文档列表数据
  *          2. 重置分页信息
- * @output 刷新表格数据
+ * @output 刷新文档列表数据
  */
 const handleRefresh = () => {
   initTableData()
@@ -273,13 +345,28 @@ const handleCurrentChange = (page: number) => {
 }
 
 /**
+ * 处理菜单选择
+ *
+ * @input 用户点击导航菜单项
+ * @process 1. 更新当前激活的菜单项
+ *          2. 菜单路由跳转由 el-menu 的 router 属性自动处理
+ * @output 更新激活菜单状态
+ */
+const handleMenuSelect = (index: string) => {
+  activeMenu.value = index
+}
+
+/**
  * 组件挂载时初始化数据
  *
  * @input 组件挂载完成
- * @process 调用初始化表格数据函数
- * @output 填充表格数据
+ * @process 1. 设置当前激活的菜单项为当前路由路径
+ *          2. 调用初始化表格数据函数
+ * @output 填充表格数据，设置菜单激活状态
  */
 onMounted(() => {
+  // 根据当前路由设置激活的菜单项
+  activeMenu.value = route.path
   initTableData()
 })
 </script>
@@ -288,16 +375,47 @@ onMounted(() => {
 /* 表格容器样式 - 全屏显示 */
 .table-container {
   width: 100vw;
-  height: 100%;
+  height: 100vh;
   background-color: #f5f5f5;
   box-sizing: border-box;
   margin: 0;
-  overflow: auto;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* 布局容器样式 */
+.layout-container {
+  width: 100%;
+  height: 100%;
+}
+
+/* 左侧导航栏容器样式 */
+.aside-container {
+  background-color: #ffffff;
+  border-right: 1px solid #e4e7ed;
+  overflow-y: auto;
+}
+
+/* 左侧导航菜单样式 */
+.aside-menu {
+  border-right: none;
+  height: 100%;
+}
+
+/* 右侧主内容区域样式 */
+.main-container {
+  background-color: #f5f5f5;
+  padding: 20px;
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 
 /* 表格卡片样式 */
 .table-card {
   border-radius: 8px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 /* 卡片头部样式 */
@@ -328,18 +446,15 @@ onMounted(() => {
   justify-content: flex-end;
 }
 
-/* 响应式设计 - 移动端适配 */
-@media (max-width: 768px) {
-  .table-container {
-    padding: 10px;
-  }
-
-  .table-toolbar {
-    flex-wrap: wrap;
-  }
-
-  .pagination-container {
-    justify-content: center;
-  }
+/* 表格行高度与单元格内边距：让每一行看起来更高、更舒适 */
+.document-table :deep(.el-table__cell) {
+  padding-top: 16px;
+  padding-bottom: 16px;
 }
+
+/* 操作列按钮样式：增大按钮之间间距，方便点击 */
+.action-button + .action-button {
+  margin-left: 8px;
+}
+
 </style>
