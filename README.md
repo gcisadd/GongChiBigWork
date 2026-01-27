@@ -1,19 +1,29 @@
 # GongChiBigWork
 
-这是一个基于 Vue 3 + TypeScript + Vite 构建的现代化前端项目，集成了 Element Plus 组件库，提供了美观的用户界面和良好的开发体验。
+这是一个全栈项目，包含基于 Vue 3 + TypeScript + Vite 构建的现代化前端，以及基于 Python + FastAPI 构建的后端 API 服务。
 
 ## 项目简介
 
-本项目是一个 Vue 3 单页应用（SPA），使用最新的前端技术栈开发，包含以下主要功能：
+本项目采用前后端分离架构，包含以下主要功能：
+
+### 前端功能
 
 - **登录页面**：提供用户登录功能，包含表单验证、记住我等功能，登录成功后跳转到表格页面
 - **表格页面**：提供数据表格展示和管理功能，包含数据列表、分页、新增、编辑、删除等操作
+- **富文本编辑器**：提供可视化富文本编辑和实时预览功能
+- **个人信息页面**：提供个人信息查看和编辑功能，支持退出登录
 - **路由管理**：使用 Vue Router 进行页面路由管理
 - **状态管理**：使用 Pinia 进行全局状态管理
-- **UI 组件库**：集成 Element Plus，提供丰富的 UI 组件
-- **富文本编辑器**：集成 @vueup/vue-quill，提供可视化富文本编辑和预览能力
+
+### 后端功能
+
+- **用户认证**：JWT Token 认证，支持用户登录和注册
+- **文档管理**：完整的文档 CRUD 操作，支持权限控制
+- **个人信息管理**：用户信息的查询和更新
 
 ## 技术栈
+
+### 前端
 
 - **框架**：Vue 3 (Composition API)
 - **语言**：TypeScript
@@ -22,12 +32,38 @@
 - **状态管理**：Pinia
 - **UI 组件库**：Element Plus
 - **图标库**：@element-plus/icons-vue
+- **富文本编辑器**：@vueup/vue-quill
+
+### 后端
+
+- **框架**：FastAPI
+- **语言**：Python 3.10+
+- **数据库**：SQLite（开发）/ PostgreSQL（生产）
+- **ORM**：SQLAlchemy 2.0
+- **认证**：JWT Token
+- **密码加密**：bcrypt
 
 ## 项目结构
 
 ```
 GongChiBigWork/
-├── src/
+├── backend/              # 后端服务
+│   ├── app/
+│   │   ├── api/         # API 路由模块
+│   │   │   ├── auth.py       # 认证接口
+│   │   │   ├── documents.py  # 文档管理接口
+│   │   │   └── profile.py    # 个人信息接口
+│   │   ├── core/        # 核心配置模块
+│   │   │   ├── config.py     # 应用配置
+│   │   │   └── security.py   # 安全工具
+│   │   ├── db/          # 数据库模块
+│   │   │   ├── database.py   # 数据库连接
+│   │   │   └── models.py     # 数据模型
+│   │   └── main.py      # FastAPI 应用入口
+│   ├── requirements.txt # Python 依赖
+│   ├── run.py          # 启动脚本
+│   └── README.md       # 后端说明文档
+├── src/                 # 前端源码
 │   ├── assets/          # 静态资源文件
 │   ├── components/      # 公共组件
 │   ├── router/          # 路由配置
@@ -35,11 +71,13 @@ GongChiBigWork/
 │   ├── views/           # 页面组件
 │   │   ├── AboutView.vue          # 登录页面
 │   │   ├── TableView.vue         # 表格页面（文档列表）
-│   │   └── RichTextEditorView.vue # 富文本编辑器页面
+│   │   ├── RichTextEditorView.vue # 富文本编辑器页面
+│   │   └── ProfileView.vue        # 个人信息页面
 │   ├── App.vue          # 根组件
 │   └── main.ts          # 应用入口文件
 ├── public/              # 公共静态资源
-└── package.json         # 项目依赖配置
+├── package.json         # 前端依赖配置
+└── README.md           # 项目说明文档
 ```
 
 ## 功能说明
@@ -202,13 +240,40 @@ npm install
 
 ## 开发命令
 
-### 启动开发服务器（热重载）
+### 前端开发
+
+#### 启动开发服务器（热重载）
 
 ```sh
 npm run dev
 ```
 
 启动后，访问 `http://localhost:5173` 查看应用。
+
+### 后端开发
+
+#### 启动后端服务
+
+```sh
+# 进入后端目录
+cd backend
+
+# 激活虚拟环境（如果使用）
+# Windows: venv\Scripts\activate
+# Linux/Mac: source venv/bin/activate
+
+# 启动服务
+python run.py
+```
+
+启动后，访问：
+- **API 文档**：http://localhost:8000/api/docs
+- **ReDoc 文档**：http://localhost:8000/api/redoc
+- **健康检查**：http://localhost:8000/api/health
+
+### 同时启动前后端
+
+建议使用两个终端窗口，分别运行前端和后端服务。
 
 ### 类型检查、编译和生产构建
 
