@@ -15,7 +15,13 @@
             <el-icon><Document /></el-icon>
             <span>文档列表</span>
           </el-menu-item>
-          <el-menu-item index="/about">
+          <!-- 富文本编辑器菜单项 -->
+          <el-menu-item index="/editor">
+            <el-icon><Edit /></el-icon>
+            <span>富文本编辑器</span>
+          </el-menu-item>
+          <!-- 个人信息菜单项 -->
+          <el-menu-item index="/profile">
             <el-icon><User /></el-icon>
             <span>关于</span>
           </el-menu-item>
@@ -104,7 +110,7 @@
 import { Delete, Document, Edit, Plus, Refresh, User } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 /**
  * 文档列表页面组件
  *
@@ -130,8 +136,9 @@ interface DocumentRow {
   modifiedTime: string
 }
 
-// 路由实例，用于获取当前路由路径
+// 路由实例，用于获取当前路由路径和执行页面跳转
 const route = useRoute()
+const router = useRouter()
 
 // 当前激活的菜单项
 const activeMenu = ref('/table')
@@ -215,15 +222,12 @@ const handleSelectionChange = (selection: DocumentRow[]) => {
  * 处理新建文档操作
  *
  * @input 用户点击新建文档按钮
- * @process 1. 显示提示信息
- *          2. 后续可打开新建文档对话框或跳转到编辑器
- * @output 显示提示消息
+ * @process 1. 直接通过路由跳转到富文本编辑器页面 `/editor`
+ *          2. 后续可在跳转时携带文档 ID 或其他参数用于初始化编辑内容
+ * @output 跳转到富文本编辑器页面
  */
 const handleAdd = () => {
-  ElMessage.info('新建文档功能待实现，后续将跳转到文本编辑器')
-  // 后续可以打开新建文档对话框或跳转到编辑器
-  // dialogVisible.value = true
-  // 或 router.push('/editor')
+  router.push('/editor')
 }
 
 /**
@@ -231,14 +235,17 @@ const handleAdd = () => {
  *
  * @input 用户点击编辑按钮
  * @process 1. 获取当前文档数据
- *          2. 显示提示信息
- *          3. 后续可跳转到文本编辑器编辑该文档（跳转功能暂不实现）
- * @output 显示提示消息
+ *          2. 通过路由跳转到富文本编辑器页面，并在查询参数中携带文档 ID
+ *          3. 后续可在编辑器页面根据 ID 加载对应文档内容（目前仅跳转，不做数据加载）
+ * @output 跳转到富文本编辑器页面
  */
 const handleEdit = (row: DocumentRow) => {
-  ElMessage.info(`编辑文档：${row.title}（跳转功能待实现）`)
-  // 后续可以跳转到文本编辑器编辑该文档
-  // router.push(`/editor/${row.id}`)
+  router.push({
+    path: '/editor',
+    query: {
+      id: String(row.id),
+    },
+  })
 }
 
 /**

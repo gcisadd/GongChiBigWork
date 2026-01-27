@@ -24,6 +24,18 @@ const router = createRouter({
       // which is lazy-loaded when the route is visited.
       component: () => import('../views/TableView.vue'),
     },
+    {
+      path: '/editor',
+      name: 'editor',
+      // 富文本编辑器页面路由
+      component: () => import('../views/RichTextEditorView.vue'),
+    },
+    {
+      path: '/profile',
+      name: 'profile',
+      // 个人信息页面路由
+      component: () => import('../views/ProfileView.vue'),
+    },
   ],
 })
 
