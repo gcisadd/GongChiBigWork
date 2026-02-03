@@ -65,9 +65,10 @@
 
 <script setup lang="ts">
 import { Lock, User } from '@element-plus/icons-vue'
-import { type FormInstance, type FormRules } from 'element-plus'
+import { type FormInstance, type FormRules, ElMessage } from 'element-plus'
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { authApi } from '../services/api'
 
 /**
  * 登录页面组件
@@ -134,25 +135,31 @@ const loginRules: FormRules<LoginForm> = {
  *
  * @input 用户点击登录按钮或按回车键
  * @process 1. 验证表单字段是否符合规则
- *          2. 如果验证通过，设置加载状态为 true
- *          3. 登录逻辑暂时留空（后续可添加实际登录 API 调用）
- *          4. 跳转到表格页面
- * @output 跳转到表格页面
+ *          2. 如果验证通过，调用后端登录 API
+ *          3. 登录成功后跳转到表格页面
+ * @output 跳转到表格页面或显示错误消息
  */
 const handleLogin = async () => {
   if (!loginFormRef.value) return
 
   // 验证表单
-  await loginFormRef.value.validate((valid) => {
+  await loginFormRef.value.validate(async (valid) => {
     if (valid) {
       loading.value = true
 
-      // 登录逻辑暂时留空，直接跳转到表格页
-      setTimeout(() => {
-        loading.value = false
+      try {
+        // 调用后端登录 API
+        await authApi.login(loginForm.username, loginForm.password, loginForm.remember)
+        ElMessage.success('登录成功')
         // 跳转到表格页面
         router.push('/table')
-      }, 500)
+      } catch (error: any) {
+        // 显示错误消息
+        const errorMessage = error.response?.data?.detail || '登录失败，请检查用户名和密码'
+        ElMessage.error(errorMessage)
+      } finally {
+        loading.value = false
+      }
     }
   })
 }

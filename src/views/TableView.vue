@@ -62,8 +62,8 @@
         <!-- 其余列使用 min-width，由表格自动按剩余空间等比拉伸，铺满整行 -->
         <el-table-column prop="id" label="文档ID" min-width="100" />
         <el-table-column prop="title" label="文档名" min-width="200" />
-        <el-table-column prop="creator" label="创建者" min-width="150" />
-        <el-table-column prop="modifiedTime" label="修改时间" min-width="200" />
+        <el-table-column prop="creator_name" label="创建者" min-width="150" />
+        <el-table-column prop="modified_time" label="修改时间" min-width="200" />
         <el-table-column label="操作" min-width="180" fixed="right">
           <template #default="scope">
             <el-button
@@ -111,6 +111,7 @@ import { Delete, Document, Edit, Plus, Refresh, User } from '@element-plus/icons
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { documentApi } from '../services/api'
 /**
  * 文档列表页面组件
  *
@@ -132,8 +133,8 @@ import { useRoute, useRouter } from 'vue-router'
 interface DocumentRow {
   id: number
   title: string
-  creator: string
-  modifiedTime: string
+  creator_name: string
+  modified_time: string
 }
 
 // 路由实例，用于获取当前路由路径和执行页面跳转
@@ -176,34 +177,41 @@ const formatDateTime = (date: Date): string => {
 }
 
 /**
- * 初始化文档列表数据
+ * 加载文档列表数据
  *
- * @input 组件挂载时触发
- * @process 1. 生成模拟文档数据
+ * @input 组件挂载时或用户触发刷新
+ * @process 1. 调用后端 API 获取文档列表
  *          2. 设置数据总数
  *          3. 更新表格显示
  * @output 填充文档列表数据
  */
-const initTableData = () => {
-  // 模拟文档数据生成
-  const mockData: DocumentRow[] = []
-  const creators = ['张三', '李四', '王五', '赵六', '钱七', '孙八', '周九', '吴十']
+const loadTableData = async () => {
+  try {
+    // 调用后端 API 获取文档列表
+    const response = await documentApi.getDocuments(currentPage.value, pageSize.value)
 
-  for (let i = 1; i <= 50; i++) {
-    // 生成随机的修改时间（最近30天内）
-    const now = new Date()
-    const daysAgo = Math.floor(Math.random() * 30)
-    const modifiedDate = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000)
+    // 更新表格数据
+    tableData.value = response.items || []
+    total.value = response.total || 0
+  } catch (error) {
+    console.error('加载文档列表失败:', error)
+    ElMessage.error('加载文档列表失败')
 
-    mockData.push({
-      id: i,
-      title: `文档${i}_示例文档标题`,
-      creator: creators[Math.floor(Math.random() * creators.length)] || '未知',
-      modifiedTime: formatDateTime(modifiedDate),
-    })
+    // 如果加载失败，使用空数组
+    tableData.value = []
+    total.value = 0
   }
-  tableData.value = mockData
-  total.value = mockData.length
+}
+
+/**
+ * 初始化文档列表数据
+ *
+ * @input 组件挂载时触发
+ * @process 1. 加载文档列表数据
+ * @output 填充文档列表数据
+ */
+const initTableData = () => {
+  loadTableData()
 }
 
 /**
@@ -253,8 +261,8 @@ const handleEdit = (row: DocumentRow) => {
  *
  * @input 用户点击删除按钮
  * @process 1. 确认删除操作
- *          2. 从文档列表中移除该文档
- *          3. 更新数据总数
+ *          2. 调用后端 API 删除文档
+ *          3. 重新加载文档列表
  * @output 更新文档列表数据，显示成功消息
  */
 const handleDeleteRow = async (row: DocumentRow) => {
@@ -265,14 +273,18 @@ const handleDeleteRow = async (row: DocumentRow) => {
       type: 'warning',
     })
 
-    const index = tableData.value.findIndex((item) => item.id === row.id)
-    if (index > -1) {
-      tableData.value.splice(index, 1)
-      total.value--
-      ElMessage.success('删除成功')
+    // 调用后端 API 删除文档
+    await documentApi.deleteDocument(row.id)
+
+    // 重新加载文档列表
+    await loadTableData()
+
+    ElMessage.success('删除成功')
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('删除文档失败:', error)
+      ElMessage.error('删除文档失败')
     }
-  } catch {
-    // 用户取消删除
   }
 }
 
@@ -312,13 +324,13 @@ const handleDelete = async () => {
  * 处理刷新操作
  *
  * @input 用户点击刷新按钮
- * @process 1. 重新初始化文档列表数据
+ * @process 1. 重新加载文档列表数据
  *          2. 重置分页信息
  * @output 刷新文档列表数据
  */
 const handleRefresh = () => {
-  initTableData()
   currentPage.value = 1
+  loadTableData()
   ElMessage.success('刷新成功')
 }
 
@@ -327,14 +339,13 @@ const handleRefresh = () => {
  *
  * @input 用户改变每页显示数量
  * @process 1. 更新每页显示数量
- *          2. 重新加载数据（实际项目中应调用 API）
+ *          2. 重新加载数据
  * @output 更新表格显示
  */
 const handleSizeChange = (size: number) => {
   pageSize.value = size
   currentPage.value = 1
-  // 实际项目中应调用 API 重新加载数据
-  ElMessage.info(`每页显示 ${size} 条`)
+  loadTableData()
 }
 
 /**
@@ -342,13 +353,12 @@ const handleSizeChange = (size: number) => {
  *
  * @input 用户切换页码
  * @process 1. 更新当前页码
- *          2. 重新加载数据（实际项目中应调用 API）
+ *          2. 重新加载数据
  * @output 更新表格显示
  */
 const handleCurrentChange = (page: number) => {
   currentPage.value = page
-  // 实际项目中应调用 API 重新加载数据
-  ElMessage.info(`当前第 ${page} 页`)
+  loadTableData()
 }
 
 /**

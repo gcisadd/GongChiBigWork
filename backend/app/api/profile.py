@@ -18,11 +18,13 @@ router = APIRouter()
 class ProfileUpdate(BaseModel):
     """
     更新个人信息请求模型
+    
+    所有字段都是可选的，支持部分更新
     """
-    username: str
-    email: EmailStr
-    phone: str
-    bio: str
+    username: str = None
+    email: EmailStr = None
+    phone: str = None
+    bio: str = None
 
 
 class ProfileResponse(BaseModel):
@@ -67,36 +69,39 @@ async def update_profile(
     """
     更新当前用户个人信息
     
-    @input profile_data - 要更新的个人信息
+    @input profile_data - 要更新的个人信息（可选字段）
     @input db - 数据库会话
     @input current_user - 当前登录用户
-    @process 1. 检查用户名和邮箱是否与其他用户冲突
-    #          2. 更新用户信息
+    @process 1. 检查用户名是否与其他用户冲突（如果提供）
+    #          2. 检查邮箱是否与其他用户冲突（如果提供）
+    #          3. 更新用户信息（只更新提供的字段）
     @output 返回更新后的个人信息
     """
-    # 检查用户名是否与其他用户冲突
-    if profile_data.username != current_user.username:
+    # 检查用户名是否与其他用户冲突（如果提供了新用户名且与当前不同）
+    if profile_data.username and profile_data.username != current_user.username:
         existing_user = db.query(User).filter(User.username == profile_data.username).first()
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="用户名已被使用",
             )
+        current_user.username = profile_data.username
     
-    # 检查邮箱是否与其他用户冲突
-    if profile_data.email != current_user.email:
+    # 检查邮箱是否与其他用户冲突（如果提供了新邮箱且与当前不同）
+    if profile_data.email and profile_data.email != current_user.email:
         existing_user = db.query(User).filter(User.email == profile_data.email).first()
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="邮箱已被注册",
             )
+        current_user.email = profile_data.email
     
-    # 更新用户信息
-    current_user.username = profile_data.username
-    current_user.email = profile_data.email
-    current_user.phone = profile_data.phone
-    current_user.bio = profile_data.bio
+    # 更新其他字段（如果提供）
+    if profile_data.phone is not None:
+        current_user.phone = profile_data.phone
+    if profile_data.bio is not None:
+        current_user.bio = profile_data.bio
     
     db.commit()
     db.refresh(current_user)

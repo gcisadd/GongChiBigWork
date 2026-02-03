@@ -100,6 +100,7 @@ import '@vueup/vue-quill/dist/vue-quill.snow.css'
 import { ElMessage } from 'element-plus'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { documentApi } from '../services/api'
 
 /**
  * 富文本编辑器页面组件
@@ -197,21 +198,34 @@ const handleMenuSelect = (index: string) => {
 /**
  * 处理保存操作
  *
- * @input 用户点击“保存内容”按钮
+ * @input 用户点击"保存内容"按钮
  * @process 1. 校验标题和内容是否为空
  *          2. 如果为空给出友好提示
- *          3. 如果不为空，模拟保存成功（实际项目中可调用后端 API）
- * @output 显示保存成功或提示消息
+ *          3. 调用后端 API 保存文档
+ * @output 显示保存成功或错误消息
  */
-const handleSave = () => {
-  if (!title.value.trim() && !content.value.trim()) {
-    ElMessage.warning('请输入标题或内容后再保存')
+const handleSave = async () => {
+  if (!title.value.trim()) {
+    ElMessage.warning('请输入文档标题')
     return
   }
 
-  // 这里为模拟保存逻辑，实际项目中可以调用后端接口
-  // 示例：await saveDocument({ title: title.value, content: content.value })
-  ElMessage.success('内容已模拟保存（后续可接入真实接口）')
+  if (!content.value.trim()) {
+    ElMessage.warning('请输入文档内容')
+    return
+  }
+
+  try {
+    // 调用后端 API 保存文档
+    await documentApi.createDocument({
+      title: title.value,
+      content: content.value,
+    })
+    ElMessage.success('文档保存成功')
+  } catch (error) {
+    console.error('保存文档失败:', error)
+    ElMessage.error('保存文档失败，请稍后重试')
+  }
 }
 
 /**

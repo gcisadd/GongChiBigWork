@@ -118,6 +118,7 @@ import { Document, Edit, Message, Phone, SwitchButton, User } from '@element-plu
 import { type FormInstance, type FormRules, ElMessage, ElMessageBox } from 'element-plus'
 import { onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { authApi, profileApi } from '../services/api'
 
 /**
  * 个人信息页面组件
@@ -142,6 +143,24 @@ interface ProfileForm {
   email: string
   phone: string
   bio: string
+}
+
+/**
+ * 用户信息接口（后端返回的数据结构）
+ *
+ * @interface UserInfo
+ * @property {number} id - 用户ID
+ * @property {string} username - 用户名
+ * @property {string} email - 邮箱
+ * @property {string} [phone] - 手机号
+ * @property {string} [bio] - 个人简介
+ */
+interface UserInfo {
+  id: number
+  username: string
+  email: string
+  phone?: string
+  bio?: string
 }
 
 /**
@@ -218,20 +237,30 @@ const profileRules: FormRules<ProfileForm> = {
  * 初始化个人信息数据
  *
  * @input 组件挂载时触发
- * @process 1. 从 localStorage 或后端 API 获取用户信息
- *          2. 填充到表单中
+ * @process 1. 从 localStorage 获取用户名
+ *          2. 调用后端 API 获取用户信息
+ *          3. 填充到表单中
  * @output 填充个人信息表单数据
  */
-const initProfileData = () => {
-  // 模拟从 localStorage 或后端获取用户信息
-  // 实际项目中应该调用 API：const userInfo = await getUserInfo()
-  const savedUsername = localStorage.getItem('username') || ''
+const initProfileData = async () => {
+  try {
+    // 调用后端 API 获取用户信息
+    const userInfo: UserInfo = await authApi.getCurrentUser()
 
-  // 模拟用户数据
-  profileForm.username = savedUsername || '示例用户'
-  profileForm.email = 'example@example.com'
-  profileForm.phone = '13800138000'
-  profileForm.bio = '这是一个示例的个人简介，您可以在这里编辑您自己的简介内容。'
+    // 填充表单数据
+    profileForm.username = userInfo.username || ''
+    profileForm.email = userInfo.email || ''
+    profileForm.phone = userInfo.phone || ''
+    profileForm.bio = userInfo.bio || ''
+  } catch (error) {
+    console.error('获取用户信息失败:', error)
+    // 如果获取失败，使用本地存储的用户名
+    const savedUsername = localStorage.getItem('username') || ''
+    profileForm.username = savedUsername || '示例用户'
+    profileForm.email = 'example@example.com'
+    profileForm.phone = '13800138000'
+    profileForm.bio = '这是一个示例的个人简介，您可以在这里编辑您自己的简介内容。'
+  }
 }
 
 /**
@@ -253,7 +282,7 @@ const handleMenuSelect = (index: string) => {
  * @input 用户点击"保存修改"按钮
  * @process 1. 验证表单字段是否符合规则
  *          2. 如果验证通过，设置加载状态为 true
- *          3. 模拟保存到后端（实际项目中应调用 API）
+ *          3. 调用后端 API 更新用户信息
  *          4. 显示保存成功消息
  * @output 显示保存成功或错误消息
  */
@@ -261,18 +290,24 @@ const handleSave = async () => {
   if (!profileFormRef.value) return
 
   // 验证表单
-  await profileFormRef.value.validate((valid) => {
+  await profileFormRef.value.validate(async (valid) => {
     if (valid) {
       saving.value = true
 
-      // 模拟保存逻辑，实际项目中应该调用后端接口
-      // 示例：await updateProfile(profileForm)
-      setTimeout(() => {
-        saving.value = false
-        // 保存用户名到 localStorage（实际项目中应保存 token）
-        localStorage.setItem('username', profileForm.username)
+      try {
+        // 调用后端 API 更新用户信息
+        await profileApi.updateProfile({
+          phone: profileForm.phone,
+          bio: profileForm.bio,
+        })
+
         ElMessage.success('个人信息保存成功')
-      }, 500)
+      } catch (error) {
+        console.error('保存个人信息失败:', error)
+        ElMessage.error('保存个人信息失败，请稍后重试')
+      } finally {
+        saving.value = false
+      }
     }
   })
 }
@@ -297,7 +332,7 @@ const handleReset = () => {
  *
  * @input 用户点击"退出登录"按钮
  * @process 1. 确认退出操作
- *          2. 清除本地存储的用户信息（实际项目中应清除 token）
+ *          2. 清除本地存储的用户信息
  *          3. 跳转到登录页面
  * @output 跳转到登录页面
  */
@@ -309,9 +344,9 @@ const handleLogout = async () => {
       type: 'warning',
     })
 
-    // 清除本地存储的用户信息（实际项目中应清除 token）
+    // 清除本地存储的用户信息
+    localStorage.removeItem('token')
     localStorage.removeItem('username')
-    // 实际项目中还应清除 token：localStorage.removeItem('token')
 
     ElMessage.success('已退出登录')
     // 跳转到登录页面

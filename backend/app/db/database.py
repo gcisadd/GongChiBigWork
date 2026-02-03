@@ -9,6 +9,14 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
 
+# 验证 DATABASE_URL 是否有效
+if not settings.DATABASE_URL or settings.DATABASE_URL.strip() == "":
+    raise ValueError(
+        "数据库连接 URL 未设置或为空！\n"
+        "请确保在 .env 文件中设置了 DATABASE_URL，\n"
+        "例如：DATABASE_URL=sqlite:///./app.db"
+    )
+
 # 创建数据库引擎
 # SQLite 数据库文件将保存在项目根目录
 engine = create_engine(

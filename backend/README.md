@@ -172,19 +172,69 @@ Authorization: Bearer <your_token>
 
 ## 数据库
 
+### 默认使用 SQLite
+
 默认使用 SQLite 数据库，数据库文件 `app.db` 会在首次运行时自动创建。
 
 ### 初始化数据库
 
 数据库表会在应用启动时自动创建（见 `app/main.py`）。
 
-### 切换数据库
+### 切换到 MySQL
 
-如需使用 PostgreSQL，修改 `app/core/config.py` 中的 `DATABASE_URL`：
+如需使用 MySQL 数据库，请按照以下步骤操作：
+
+#### 步骤 1：安装 MySQL 驱动
+
+```bash
+pip install pymysql
+```
+
+或者更新依赖：
+```bash
+pip install -r requirements.txt
+```
+
+#### 步骤 2：创建 MySQL 数据库
+
+执行 SQL 脚本创建数据库：
+
+```bash
+# 方式一：登录 MySQL 后执行
+mysql -u root -p
+CREATE DATABASE gongchibigwork CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+EXIT;
+
+# 方式二：直接执行 SQL 文件
+mysql -u root -p < scripts/mysql_create_database.sql
+```
+
+#### 步骤 3：创建数据表
+
+执行建表脚本：
+
+```bash
+mysql -u root -p gongchibigwork < scripts/mysql_create_tables.sql
+```
+
+或者启动应用后自动创建表（推荐）。
+
+#### 步骤 4：修改数据库配置
+
+编辑 `app/core/config.py` 中的 `DATABASE_URL`：
 
 ```python
-DATABASE_URL = "postgresql://user:password@localhost/dbname"
+# MySQL 连接示例
+DATABASE_URL = "mysql+pymysql://root:your_password@localhost:3306/gongchibigwork"
 ```
+
+或者创建 `.env` 文件配置：
+
+```env
+DATABASE_URL=mysql+pymysql://root:your_password@localhost:3306/gongchibigwork
+```
+
+详细配置说明请查看 `docs/MYSQL_CONFIG.md` 文件。
 
 ## 配置说明
 
