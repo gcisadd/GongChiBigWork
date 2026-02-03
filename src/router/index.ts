@@ -10,6 +10,12 @@ const router = createRouter({
       component: () => import('../views/AboutView.vue'),
     },
     {
+      path: '/login',
+      name: 'login-path',
+      // 登录页面路由（别名）
+      component: () => import('../views/AboutView.vue'),
+    },
+    {
       path: '/about',
       name: 'about',
       // 登录页面路由（别名）
@@ -35,6 +41,12 @@ const router = createRouter({
       name: 'profile',
       // 个人信息页面路由
       component: () => import('../views/ProfileView.vue'),
+    },
+    {
+      path: '/register',
+      name: 'register',
+      // 注册页面路由
+      component: () => import('../views/RegisterView.vue'),
     },
   ],
 })

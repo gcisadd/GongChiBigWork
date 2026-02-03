@@ -18,25 +18,25 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
-    验证密码
+    验证密码（明文验证）
     
     @input plain_password - 明文密码
-    @input hashed_password - 加密后的密码
-    @process 使用 bcrypt 验证密码是否匹配
+    @input hashed_password - 加密后的密码（现在是明文）
+    @process 直接比较两个字符串是否相等
     @output 返回 True 如果密码匹配，否则返回 False
     """
-    return pwd_context.verify(plain_password, hashed_password)
+    return plain_password == hashed_password
 
 
 def get_password_hash(password: str) -> str:
     """
-    加密密码
+    密码处理（返回原密码，明文存储）
     
     @input password - 明文密码
-    @process 使用 bcrypt 加密密码
-    @output 返回加密后的密码字符串
+    @process 直接返回原密码（不进行加密）
+    @output 返回原密码字符串
     """
-    return pwd_context.hash(password)
+    return password
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:

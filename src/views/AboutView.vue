@@ -58,6 +58,13 @@
             {{ loading ? '登录中...' : '登录' }}
           </el-button>
         </el-form-item>
+
+        <!-- 注册链接 -->
+        <el-form-item>
+          <div class="register-link">
+            还没有账号？<el-link type="primary" @click="goToRegister">立即注册</el-link>
+          </div>
+        </el-form-item>
       </el-form>
     </el-card>
   </div>
@@ -163,6 +170,13 @@ const handleLogin = async () => {
     }
   })
 }
+
+/**
+ * 跳转到注册页面
+ */
+const goToRegister = () => {
+  router.push('/register')
+}
 </script>
 
 <style scoped>
@@ -208,6 +222,13 @@ const handleLogin = async () => {
 .login-button {
   width: 100%;
   margin-top: 10px;
+}
+
+/* 注册链接样式 */
+.register-link {
+  width: 100%;
+  text-align: center;
+  color: #606266;
 }
 
 /* 响应式设计 - 移动端适配 */
