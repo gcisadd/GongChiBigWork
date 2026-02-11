@@ -48,6 +48,12 @@ const router = createRouter({
       // 注册页面路由
       component: () => import('../views/RegisterView.vue'),
     },
+    {
+      path: '/collab-editor',
+      name: 'collab-editor',
+      // 协作编辑页面路由
+      component: () => import('../views/CollabEditorView.vue'),
+    },
   ],
 })
 

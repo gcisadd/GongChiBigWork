@@ -64,8 +64,17 @@
         <el-table-column prop="title" label="文档名" min-width="200" />
         <el-table-column prop="creator_name" label="创建者" min-width="150" />
         <el-table-column prop="modified_time" label="修改时间" min-width="200" />
-        <el-table-column label="操作" min-width="180" fixed="right">
+        <el-table-column label="操作" min-width="280" fixed="right">
           <template #default="scope">
+            <el-button
+              type="success"
+              size="large"
+              :icon="Connection"
+              class="action-button"
+              @click="handleCollabEdit(scope.row)"
+            >
+              协作
+            </el-button>
             <el-button
               type="primary"
               size="large"
@@ -107,7 +116,7 @@
 </template>
 
 <script setup lang="ts">
-import { Delete, Document, Edit, Plus, Refresh, User } from '@element-plus/icons-vue'
+import { Connection, Delete, Document, Edit, Plus, Refresh, User } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -250,6 +259,22 @@ const handleAdd = () => {
 const handleEdit = (row: DocumentRow) => {
   router.push({
     path: '/editor',
+    query: {
+      id: String(row.id),
+    },
+  })
+}
+
+/**
+ * 处理协作编辑操作
+ *
+ * @input 用户点击协作编辑按钮
+ * @process 跳转到协作编辑页面
+ * @output 跳转到协作编辑页面
+ */
+const handleCollabEdit = (row: DocumentRow) => {
+  router.push({
+    path: '/collab-editor',
     query: {
       id: String(row.id),
     },

@@ -179,12 +179,9 @@ async def update_document(
             detail="文档不存在",
         )
     
-    # 检查权限：只有创建者可以修改
-    if document.creator_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="无权修改此文档",
-        )
+    # 协作编辑：允许任何登录用户编辑文档
+    # （如果是协作文档，任何登录用户都可以编辑）
+    # 注意：如果需要更严格的权限控制，可以在这里添加检查
     
     # 更新文档信息
     if document_data.title is not None:

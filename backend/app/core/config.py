@@ -89,11 +89,14 @@ class Settings(BaseSettings):
     
     # ==================== CORS 配置 ====================
     
-    # 允许的前端地址列表
+    # 允许的前端地址列表（支持开发环境）
     CORS_ORIGINS: list[str] = [
-        "http://localhost:5173",  # Vite 开发服务器默认端口
-        "http://localhost:3000",  # 其他可能的开发端口
-        "http://127.0.0.1:5173",
+        "http://localhost:5173",   # Vite 开发服务器默认端口
+        "http://localhost:3000",    # 其他可能的开发端口
+        "http://localhost:8080",    # 另一个常见端口
+        "http://127.0.0.1:5173",   # IP 形式
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:8080",
     ]
     
     class Config:

@@ -7,7 +7,7 @@ FastAPI 主应用入口文件
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, documents, profile
+from app.api import auth, documents, profile, websocket
 from app.core.config import settings
 from app.db.database import engine
 from app.db.models import Base
@@ -24,19 +24,22 @@ app = FastAPI(
     redoc_url="/api/redoc",
 )
 
-# 配置 CORS 中间件，允许前端跨域请求
+# 配置 CORS 中间件，允许前端跨域请求（包括 WebSocket）
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,  # 允许的前端地址
     allow_credentials=True,
     allow_methods=["*"],  # 允许所有 HTTP 方法
     allow_headers=["*"],  # 允许所有请求头
+    expose_headers=["*"],  # 暴露所有响应头
 )
 
 # 注册 API 路由
 app.include_router(auth.router, prefix="/api/auth", tags=["认证"])
 app.include_router(documents.router, prefix="/api/documents", tags=["文档管理"])
 app.include_router(profile.router, prefix="/api/profile", tags=["个人信息"])
+# WebSocket 路由单独注册（不需要 prefix）
+app.include_router(websocket.router)
 
 
 @app.get("/")
