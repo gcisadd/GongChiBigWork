@@ -10,6 +10,10 @@ from datetime import datetime
 from typing import Dict, Set
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from sqlalchemy.orm import Session
+
+from app.db.database import get_db
+from app.db.models import Document
 
 router = APIRouter()
 
@@ -32,6 +36,8 @@ class ConnectionManager:
         self.active_connections: Dict[int, Set[WebSocket]] = defaultdict(set)
         # online_users: {document_id: {username}}
         self.online_users: Dict[int, Set[str]] = defaultdict(set)
+        # document_contents: {document_id: content} - 存储文档内容用于同步
+        self.document_contents: Dict[int, str] = defaultdict(str)
 
     async def connect(self, websocket: WebSocket, document_id: int, username: str):
         """
@@ -41,13 +47,29 @@ class ConnectionManager:
         @input document_id - 文档ID
         @input username - 用户名
         @process 1. 将连接添加到文档房间
-                  2. 广播用户加入消息
+                  2. 发送当前文档内容给新用户
+                  3. 广播用户加入消息
         @output 建立连接，在线用户列表更新
         """
         print(f"[WebSocket] 用户 {username} 已连接, document_id={document_id}")
         self.active_connections[document_id].add(websocket)
         print(f"[WebSocket] 当前连接数: {len(self.active_connections[document_id])}")
         self.online_users[document_id].add(username)
+
+        # 发送当前文档内容给新加入的用户（让他们看到已有内容）
+        try:
+            db = next(get_db())
+            document = db.query(Document).filter(Document.id == document_id).first()
+            if document and document.content:
+                print(f"[WebSocket] 发送当前文档内容给新用户, 内容长度={len(document.content)}")
+                await websocket.send_json({
+                    "type": "sync_content",
+                    "content": document.content,
+                })
+        except Exception as e:
+            print(f"[WebSocket] 获取文档内容失败: {e}")
+        finally:
+            db.close()
 
         # 广播用户加入消息
         print(f"[WebSocket] 准备广播 user_joined, 当前在线用户: {list(self.online_users[document_id])}")
@@ -108,7 +130,7 @@ class ConnectionManager:
                     pass
 
     async def broadcast_content_change(
-        self, document_id: int, username: str, delta: dict, source: str
+        self, document_id: int, username: str, delta: dict, source: str, exclude: WebSocket | None = None
     ):
         """
         广播内容变更
@@ -117,10 +139,15 @@ class ConnectionManager:
         @input username - 用户名
         @input delta - Quill delta 对象
         @input source - 变更来源（'user' 或 'api'）
+        @input exclude - 要排除的连接（发送者）
         @process 广播内容变更给其他用户
         @output 其他用户收到内容更新
         """
         print(f"[WebSocket] 广播内容变更: username={username}, delta keys={list(delta.keys())}")
+        
+        # 注意：我们不存储 delta，因为 Quill delta 是操作指令而非完整内容
+        # 新用户加入时需要从数据库获取完整内容
+        
         await self.broadcast_to_document(
             document_id,
             {
@@ -129,6 +156,7 @@ class ConnectionManager:
                 "delta": delta,
                 "source": "remote",  # 标识为远程变更
             },
+            exclude,  # 排除发送者
         )
 
     async def broadcast_cursor_position(
@@ -217,8 +245,9 @@ async def websocket_collaborate(websocket: WebSocket, document_id: int):
                     delta = raw_delta.get("delta") if "delta" in raw_delta else raw_delta
                     source = data.get("source", "user")
                     print(f"[WebSocket] 处理后 delta keys: {list(delta.keys())}, source: {source}")
+                    # 广播时排除发送者，避免发送者收到自己发送的delta导致重复处理
                     await manager.broadcast_content_change(
-                        document_id, username, delta, source
+                        document_id, username, delta, source, exclude=websocket
                     )
 
                 elif message_type == "cursor_position":

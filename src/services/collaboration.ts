@@ -27,6 +27,7 @@ type MessageType =
   | 'cursor_position'
   | 'sync_request'
   | 'sync_users'
+  | 'sync_content'
   | 'ping'
   | 'pong'
 
@@ -39,6 +40,7 @@ interface MessageData {
   users?: string[]
   delta?: Record<string, unknown>
   source?: string
+  content?: string
   cursor?: {
     index: number
     length: number
@@ -63,8 +65,6 @@ class CollaborationService {
 
   // 已处理 delta 的去重 Set（防止重复应用）
   private processedDeltas: Set<string> = new Set()
-  // 清理去重 Set 的定时器
-  private cleanupTimer: number | null = null
 
   // 在线用户列表
   onlineUsers: Ref<string[]> = ref([])
@@ -84,6 +84,7 @@ class CollaborationService {
   private onUserJoined: ((username: string, users: string[]) => void) | null = null
   private onUserLeft: ((username: string, users: string[]) => void) | null = null
   private onSyncUsers: ((users: string[]) => void) | null = null
+  private onSyncContent: ((content: string) => void) | null = null
   private onCursorPosition:
     | ((username: string, cursor: { index: number; length: number }) => void)
     | null = null
@@ -222,6 +223,8 @@ class CollaborationService {
    * @param source - 变更来源
    */
   sendContentChange(delta: Record<string, unknown>, source: string = 'user'): void {
+    // 不修改原始 delta，避免序列号影响 Quill 处理
+    // 直接发送原始 delta，后端会广播给其他用户
     this.send({
       type: 'content_change',
       username: this.username,
@@ -284,6 +287,13 @@ class CollaborationService {
   }
 
   /**
+   * 设置内容同步回调
+   */
+  onSyncContentCallback(callback: (content: string) => void): void {
+    this.onSyncContent = callback
+  }
+
+  /**
    * 设置光标位置回调
    */
   onCursorPositionCallback(
@@ -320,7 +330,7 @@ class CollaborationService {
       case 'content_change':
         console.log('[协作] 收到 content_change:', JSON.stringify(data))
         if (data.delta && data.username !== this.username) {
-          // 生成 delta 的唯一标识（用户名 + delta 内容 + 时间戳）
+          // 生成 delta 的唯一标识（用户名 + delta 内容）
           const deltaKey = `${data.username}-${JSON.stringify(data.delta)}`
 
           // 检查是否已经处理过这个 delta
@@ -332,14 +342,14 @@ class CollaborationService {
           // 标记为已处理
           this.processedDeltas.add(deltaKey)
 
-          // 5秒后清理这个标记
+          // 10秒后清理这个标记
           setTimeout(() => {
             this.processedDeltas.delete(deltaKey)
-          }, 5000)
+          }, 10000)
 
-          // 后端已经解包了嵌套的 delta，直接使用
-          console.log('[协作] 处理后的 delta:', JSON.stringify(data.delta))
-          this.onContentChange?.(data.delta, data.source || 'user')
+          // 直接处理 delta
+          console.log('[协作] 处理 delta:', JSON.stringify(data.delta))
+          this.onContentChange?.(data.delta, data.source || 'remote')
         }
         break
 
@@ -362,6 +372,13 @@ class CollaborationService {
         console.log('[协作] 处理 sync_users:', data.users)
         this.onlineUsers.value = data.users || []
         this.onSyncUsers?.(this.onlineUsers.value)
+        break
+
+      case 'sync_content':
+        console.log('[协作] 收到 sync_content, 内容长度:', data.content?.length)
+        if (data.content) {
+          this.onSyncContent?.(data.content)
+        }
         break
 
       case 'pong':

@@ -460,8 +460,8 @@ const startAutoSave = () => {
     if (documentId.value && isConnected.value) {
       autoSave()
     }
-  }, 5000)
-  console.log('[协作] 自动保存定时器已启动（每5秒）')
+  }, 1000)
+  console.log('[协作] 自动保存定时器已启动（每1秒）')
 }
 
 /**
@@ -474,6 +474,18 @@ const onTextChange = (delta: Record<string, unknown>) => {
   // 如果 Quill 正在初始化，忽略（这可能是 v-model 绑定导致的虚假事件）
   if (isQuillInitializing.value) {
     console.log('[协作] 忽略 Quill 初始化时的 text-change 事件')
+    return
+  }
+
+  // 检查 delta 是否有效（忽略空的 delta）
+  if (!delta || Object.keys(delta).length === 0) {
+    console.log('[协作] 忽略空的 delta')
+    return
+  }
+
+  // 检查 delta 是否只包含 retain（这是选区变化，不需要同步）
+  if (delta.ops && Array.isArray(delta.ops) && delta.ops.every((op: any) => op.retain !== undefined)) {
+    console.log('[协作] 忽略只包含 retain 的 delta（选区变化）')
     return
   }
 
@@ -585,6 +597,16 @@ const handleSave = async () => {
 const handleReset = () => {
   title.value = ''
   content.value = ''
+
+  // 使用 Quill API 清除编辑器内容
+  if (editorRef.value) {
+    const quill = (editorRef.value as any).quill
+    if (quill) {
+      quill.setContents([])
+      quill.setText('')
+    }
+  }
+
   ElMessage.info('已清空标题和内容')
 }
 
@@ -656,12 +678,13 @@ const setupCollaborationCallbacks = () => {
     console.log('[协作] 当前 isQuillInitializing:', isQuillInitializing.value)
 
     const quill = getQuillInstance()
-    // 如果正在处理远程变更、来源是用户、或 Quill 正在初始化，则忽略
-    if (isProcessingRemote.value || source === 'user' || isQuillInitializing.value) {
-      console.log('[协作] 忽略 content_change')
+    // 如果 Quill 正在初始化，则忽略
+    if (isQuillInitializing.value) {
+      console.log('[协作] 忽略 content_change - Quill初始化中')
       return
     }
 
+    // 即使正在处理远程变更，也要处理新的 delta
     // 开始处理远程变更
     isProcessingRemote.value = true
 
@@ -669,16 +692,13 @@ const setupCollaborationCallbacks = () => {
     console.log('[协作] 应用 delta 到 Quill')
     quill.updateContents(delta as any)
 
-    // 注意：不要手动设置 content.value，v-model 会自动处理
-    // content.value = quill.root.innerHTML
-
     console.log('[协作] delta 应用完成')
 
-    // 延迟重置标志，避免立即响应自己的变更
+    // 延迟重置标志，确保 Quill 完全处理完 delta
     setTimeout(() => {
       isProcessingRemote.value = false
       console.log('[协作] 重置 isProcessingRemote = false')
-    }, 200)
+    }, 300)
   })
 
   // 光标位置回调
@@ -694,6 +714,36 @@ const setupCollaborationCallbacks = () => {
     console.log('[协作] 新加入用户:', username)
     console.log('[协作] 当前在线用户:', users)
     ElMessage.info(`${username} 加入了编辑`)
+  })
+
+  // 内容同步回调 - 当新用户加入时，后端发送当前文档内容
+  collaborationService.onSyncContentCallback((syncContent) => {
+    console.log('[协作] ===== sync_content 回调触发 =====')
+    console.log('[协作] 同步内容长度:', syncContent?.length)
+
+    const quill = getQuillInstance()
+    if (!quill) {
+      console.log('[协作] Quill 未就绪，跳过内容同步')
+      return
+    }
+
+    // 使用 setContents 设置内容，这会替换整个编辑器内容
+    // 同时设置 isQuillInitializing 防止触发本地 text-change 事件
+    isQuillInitializing.value = true
+
+    // 直接设置 HTML 内容
+    if (syncContent) {
+      quill.root.innerHTML = syncContent
+    }
+
+    // 同时更新 v-model
+    content.value = syncContent || ''
+
+    // 延迟重置初始化状态
+    setTimeout(() => {
+      isQuillInitializing.value = false
+      console.log('[协作] sync_content 处理完成')
+    }, 500)
   })
 
   // 用户离开回调
@@ -861,16 +911,19 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-/* 编辑器内容区域 */
+/* 编辑器内容区域：左右布局 */
 .editor-content {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 20px;
   flex: 1;
 }
 
 .editor-wrapper {
+  flex: 1;
   background-color: #ffffff;
+  display: flex;
+  flex-direction: column;
 }
 
 /* 标题输入框 */
@@ -925,11 +978,14 @@ onUnmounted(() => {
 
 /* 预览区域 */
 .preview-wrapper {
-  margin-top: 10px;
+  flex: 1;
+  margin-top: 0;
   padding: 16px;
   background-color: #fafafa;
   border-radius: 6px;
   border: 1px solid #ebeef5;
+  max-height: 500px;
+  overflow-y: auto;
 }
 
 .preview-header {

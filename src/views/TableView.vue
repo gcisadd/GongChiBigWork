@@ -318,8 +318,8 @@ const handleDeleteRow = async (row: DocumentRow) => {
  *
  * @input 用户点击批量删除按钮
  * @process 1. 确认删除操作
- *          2. 从文档列表中移除选中的文档
- *          3. 更新数据总数
+ *          2. 逐个调用后端 API 删除文档
+ *          3. 重新加载文档列表
  * @output 更新文档列表数据，显示成功消息
  */
 const handleDelete = async () => {
@@ -335,13 +335,22 @@ const handleDelete = async () => {
       type: 'warning',
     })
 
-    const ids = selectedRows.value.map((row) => row.id)
-    tableData.value = tableData.value.filter((item) => !ids.includes(item.id))
-    total.value = tableData.value.length
+    // 逐个删除选中的文档
+    for (const row of selectedRows.value) {
+      await documentApi.deleteDocument(row.id)
+    }
+
+    // 重新加载文档列表
+    await loadTableData()
+
+    // 清空选中状态
     selectedRows.value = []
-    ElMessage.success('删除成功')
-  } catch {
-    // 用户取消删除
+    ElMessage.success('批量删除成功')
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('批量删除失败:', error)
+      ElMessage.error('批量删除失败，请稍后重试')
+    }
   }
 }
 
