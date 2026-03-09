@@ -57,19 +57,22 @@ class ConnectionManager:
         self.online_users[document_id].add(username)
 
         # 发送当前文档内容给新加入的用户（让他们看到已有内容）
+        # 注意：这里使用独立的数据库会话，避免影响主请求的事务
         try:
-            db = next(get_db())
-            document = db.query(Document).filter(Document.id == document_id).first()
-            if document and document.content:
-                print(f"[WebSocket] 发送当前文档内容给新用户, 内容长度={len(document.content)}")
-                await websocket.send_json({
-                    "type": "sync_content",
-                    "content": document.content,
-                })
+            from app.db.database import SessionLocal
+            db = SessionLocal()
+            try:
+                document = db.query(Document).filter(Document.id == document_id).first()
+                if document and document.content:
+                    print(f"[WebSocket] 发送当前文档内容给新用户, 内容长度={len(document.content)}")
+                    await websocket.send_json({
+                        "type": "sync_content",
+                        "content": document.content,
+                    })
+            finally:
+                db.close()  # 关闭会话，不commit（只读操作）
         except Exception as e:
             print(f"[WebSocket] 获取文档内容失败: {e}")
-        finally:
-            db.close()
 
         # 广播用户加入消息
         print(f"[WebSocket] 准备广播 user_joined, 当前在线用户: {list(self.online_users[document_id])}")
@@ -178,6 +181,30 @@ class ConnectionManager:
                 "type": "cursor_position",
                 "username": username,
                 "cursor": cursor,
+            },
+            None,  # 发送给包括发送者的所有用户
+        )
+
+    async def broadcast_document_saved(
+        self, document_id: int, username: str, title: str
+    ):
+        """
+        广播文档保存消息
+
+        @input document_id - 文档ID
+        @input username - 保存文档的用户名
+        @input title - 文档标题
+        @process 广播保存消息给所有用户
+        @output 其他用户收到保存通知
+        """
+        print(f"[WebSocket] 广播文档保存: username={username}, title={title}")
+        await self.broadcast_to_document(
+            document_id,
+            {
+                "type": "document_saved",
+                "username": username,
+                "title": title,
+                "message": f"用户 {username} 已保存文档: {title}",
             },
             None,  # 发送给包括发送者的所有用户
         )

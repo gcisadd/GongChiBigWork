@@ -91,13 +91,22 @@ class Settings(BaseSettings):
     
     # 允许的前端地址列表（支持开发环境）
     CORS_ORIGINS: list[str] = [
-        "http://localhost:5173",   # Vite 开发服务器默认端口
-        "http://localhost:3000",    # 其他可能的开发端口
-        "http://localhost:8080",    # 另一个常见端口
-        "http://127.0.0.1:5173",   # IP 形式
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:8080",
+        "*",  # 允许所有来源（开发环境）
     ]
+    
+    # ==================== AI 概括配置 ====================
+    
+    # AI 提供商：ollama（本地模型，推荐）、openai、custom、deepseek、qianwen
+    AI_PROVIDER: str = "ollama"
+    
+    # AI API Key（仅 OpenAI/custom 等需要）
+    AI_API_KEY: str = ""
+    
+    # AI API 端点（用于自定义或代理）
+    AI_API_BASE_URL: str = "https://api.openai.com/v1"
+    
+    # 使用的模型（Ollama 用 llama3.2, mistral 等，OpenAI 用 gpt-3.5-turbo 等）
+    AI_MODEL: str = "llama3.2"
     
     class Config:
         case_sensitive = True

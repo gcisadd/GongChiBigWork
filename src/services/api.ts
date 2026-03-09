@@ -237,6 +237,29 @@ export const documentApi = {
     const response = await api.delete(`/api/documents/${documentId}`)
     return response.data
   },
+
+  /**
+   * AI 概括文档内容
+   *
+   * @param {string} content - 文档内容
+   * @returns {Promise} AI 概括结果
+   */
+  generateAISummary: async (content: string) => {
+    const response = await api.post('/api/documents/ai-summary', { content })
+    return response.data
+  },
+
+  /**
+   * 更新文档概括
+   *
+   * @param {number} documentId - 文档 ID
+   * @param {string} summary - 概括内容
+   * @returns {Promise} 更新后的文档
+   */
+  updateDocumentSummary: async (documentId: number, summary: string) => {
+    const response = await api.put(`/api/documents/${documentId}/summary`, { summary })
+    return response.data
+  },
 }
 
 /**

@@ -14,10 +14,6 @@
             <el-icon><Document /></el-icon>
             <span>文档列表</span>
           </el-menu-item>
-          <el-menu-item index="/editor">
-            <el-icon><Edit /></el-icon>
-            <span>富文本编辑器</span>
-          </el-menu-item>
           <el-menu-item index="/collab-editor">
             <el-icon><Connection /></el-icon>
             <span>协作编辑</span>
@@ -62,13 +58,30 @@
                   type="primary"
                   :icon="Document"
                   :loading="saving"
-                  @click="handleSave"
+                  @click="() => { console.log('[按钮] 点击了保存按钮'); handleSave() }"
                 >
                   保存内容
                 </el-button>
-                <el-button type="success" :icon="Refresh" @click="handleReset">
-                  清空内容
+
+                <el-button
+                  type="warning"
+                  :icon="MagicStick"
+                  @click="handleAISummary"
+                  :loading="aiSummarizing"
+                  :disabled="!content || !content.trim()"
+                >
+                  AI 概括
                 </el-button>
+
+                <el-button
+                  type="success"
+                  :icon="Download"
+                  :loading="exportingPdf"
+                  @click="handleExportPdf"
+                >
+                  导出PDF
+                </el-button>
+
               </div>
             </div>
           </template>
@@ -140,6 +153,26 @@
                   </span>
                 </div>
               </div>
+
+              <!-- AI 概括显示区域 - 放在编辑器下方 -->
+              <div v-if="summary" class="ai-summary-section">
+                <div class="summary-header">
+                  <el-tag type="warning" size="small">
+                    <el-icon><MagicStick /></el-icon> AI 概括
+                  </el-tag>
+                  <el-button
+                    type="primary"
+                    size="small"
+                    text
+                    @click="copySummary"
+                  >
+                    复制
+                  </el-button>
+                </div>
+                <div class="summary-content">
+                  {{ summary }}
+                </div>
+              </div>
             </div>
 
             <!-- 右侧预览区域 -->
@@ -164,10 +197,11 @@
 </template>
 
 <script setup lang="ts">
-import { CircleCheck, CircleClose, Connection, Document, Edit, Refresh, User } from '@element-plus/icons-vue'
+import { CircleCheck, CircleClose, Connection, Document, Download, MagicStick, User } from '@element-plus/icons-vue'
 import { QuillEditor } from '@vueup/vue-quill'
 import '@vueup/vue-quill/dist/vue-quill.snow.css'
 import { ElMessage } from 'element-plus'
+import html2pdf from 'html2pdf.js'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { documentApi } from '../services/api'
@@ -212,10 +246,8 @@ let quillInstance: any = null
  * 注意：@vueup/vue-quill 的 @editor-ready 事件会传递 Quill 实例
  */
 const onEditorReady = (quill: any) => {
-  console.log('[协作] Quill 编辑器已就绪 (via @editor-ready)')
   if (quill && typeof quill.getSelection === 'function') {
     quillInstance = quill
-    console.log('[协作] Quill 实例已保存')
 
     // Quill 初始化完成，可以正常处理 text-change 事件
     // 但仍需等待内容加载完成才允许发送
@@ -232,7 +264,6 @@ onMounted(() => {
     if (editorRef.value && (editorRef.value as any).quill) {
       const quill = (editorRef.value as any).quill
       if (typeof quill.getSelection === 'function') {
-        console.log('[协作] 通过组件 .quill 属性获取 Quill 实例成功')
         quillInstance = quill
         return
       }
@@ -243,7 +274,6 @@ onMounted(() => {
     if (container) {
       const quill = (container as any).__quill
       if (quill && typeof quill.getSelection === 'function') {
-        console.log('[协作] 通过 .ql-container __quill 获取 Quill 实例成功')
         quillInstance = quill
         return
       }
@@ -254,7 +284,6 @@ onMounted(() => {
     if (editorEl) {
       const quill = (editorEl as any).__quill
       if (quill && typeof quill.getSelection === 'function') {
-        console.log('[协作] 通过 .ql-editor __quill 获取 Quill 实例成功')
         quillInstance = quill
         return
       }
@@ -281,6 +310,15 @@ const content = ref<string>('')
 
 // 保存按钮加载状态
 const saving = ref(false)
+
+// 导出 PDF 加载状态
+const exportingPdf = ref(false)
+
+// AI 概括内容
+const summary = ref<string>('')
+
+// AI 概括加载状态
+const aiSummarizing = ref<boolean>(false)
 
 // 空内容占位符
 const emptyContentPlaceholder =
@@ -321,14 +359,12 @@ const onlineUsers = computed(() => collaborationService.onlineUsers.value)
 // 其他用户光标位置（排除自己）
 const displayedCursors = computed(() => {
   const cursors = collaborationService.cursors.value
-  console.log('[协作] 所有光标:', Object.fromEntries(cursors))
   const result: Record<string, CollaboratorInfo> = {}
   cursors.forEach((cursor, username) => {
     if (username !== currentUsername.value) {
       result[username] = cursor
     }
   })
-  console.log('[协作] 排除自己后的光标:', result)
   return result
 })
 
@@ -407,8 +443,6 @@ const getCursorStyle = (cursor: CollaboratorInfo, username: string) => {
       const relativeLeft = bounds.left + editorRect.left - containerRect.left
       const relativeTop = bounds.top + editorRect.top - containerRect.top
 
-      console.log(`[协作] 光标位置计算: index=${cursor.cursor.index}, left=${relativeLeft}, top=${relativeTop}`)
-
       return {
         left: `${relativeLeft}px`,
         top: `${relativeTop}px`,
@@ -422,7 +456,6 @@ const getCursorStyle = (cursor: CollaboratorInfo, username: string) => {
       '--cursor-color': color,
     }
   } catch (error) {
-    console.error('[协作] 获取光标样式失败:', error)
     return {}
   }
 }
@@ -443,9 +476,7 @@ const autoSave = async () => {
       content: content.value,
     })
     lastSaveTime.value = new Date()
-    console.log(`[协作] 自动保存成功: ${lastSaveTime.value.toLocaleTimeString()}`)
   } catch (error) {
-    console.error('自动保存失败:', error)
   } finally {
     isAutoSaving.value = false
   }
@@ -461,7 +492,6 @@ const startAutoSave = () => {
       autoSave()
     }
   }, 1000)
-  console.log('[协作] 自动保存定时器已启动（每1秒）')
 }
 
 /**
@@ -473,23 +503,19 @@ const onTextChange = (delta: Record<string, unknown>) => {
 
   // 如果 Quill 正在初始化，忽略（这可能是 v-model 绑定导致的虚假事件）
   if (isQuillInitializing.value) {
-    console.log('[协作] 忽略 Quill 初始化时的 text-change 事件')
     return
   }
 
   // 检查 delta 是否有效（忽略空的 delta）
   if (!delta || Object.keys(delta).length === 0) {
-    console.log('[协作] 忽略空的 delta')
     return
   }
 
   // 检查 delta 是否只包含 retain（这是选区变化，不需要同步）
   if (delta.ops && Array.isArray(delta.ops) && delta.ops.every((op: any) => op.retain !== undefined)) {
-    console.log('[协作] 忽略只包含 retain 的 delta（选区变化）')
     return
   }
 
-  console.log('[协作] onTextChange delta:', JSON.stringify(delta))
   // 发送内容变更到协作服务器
   collaborationService.sendContentChange(delta, 'user')
 }
@@ -534,9 +560,6 @@ const onSelectionChange = () => {
   if (quill) {
     const selection = quill.getSelection()
     if (selection) {
-      console.log(`[协作] 发送光标位置: index=${selection.index}, length=${selection.length}`)
-      console.log(`[协作] isConnected:`, collaborationService.isConnected.value)
-      console.log(`[协作] username:`, currentUsername.value)
       collaborationService.sendCursorPosition(selection.index, selection.length)
     }
   }
@@ -554,6 +577,8 @@ const handleMenuSelect = (index: string) => {
  * 保存文档
  */
 const handleSave = async () => {
+  console.log('[保存] 开始保存文档, documentId:', documentId.value, 'title:', title.value)
+
   if (!title.value.trim()) {
     ElMessage.warning('请输入文档标题')
     return
@@ -569,25 +594,177 @@ const handleSave = async () => {
   try {
     if (documentId.value) {
       // 更新现有文档
+      console.log('[保存] 更新文档, id:', documentId.value)
       await documentApi.updateDocument(documentId.value, {
         title: title.value,
         content: content.value,
       })
+      console.log('[保存] 文档更新成功')
     } else {
       // 创建新文档
+      console.log('[保存] 创建新文档')
       const result = await documentApi.createDocument({
         title: title.value,
         content: content.value,
       })
       documentId.value = result.id
+      console.log('[保存] 文档创建成功, id:', result.id)
     }
 
     ElMessage.success('文档保存成功')
   } catch (error) {
-    console.error('保存文档失败:', error)
+    console.error('[保存] 保存文档失败:', error)
     ElMessage.error('保存文档失败，请稍后重试')
   } finally {
     saving.value = false
+  }
+}
+
+/**
+ * 导出 PDF
+ */
+const handleExportPdf = async () => {
+  if (!title.value.trim() && !content.value.trim()) {
+    ElMessage.warning('文档内容为空，无法导出PDF')
+    return
+  }
+
+  exportingPdf.value = true
+
+  try {
+    // 创建临时的 HTML 容器用于生成 PDF
+    const container = document.createElement('div')
+    container.style.padding = '20px'
+    container.style.fontFamily = 'Arial, sans-serif'
+
+    // 添加标题
+    const titleElement = document.createElement('h1')
+    titleElement.textContent = title.value || '未命名文档'
+    titleElement.style.color = '#303133'
+    titleElement.style.marginBottom = '20px'
+    titleElement.style.borderBottom = '2px solid #409eff'
+    titleElement.style.paddingBottom = '10px'
+    container.appendChild(titleElement)
+
+    // 添加内容
+    const contentElement = document.createElement('div')
+    contentElement.innerHTML = content.value || ''
+    contentElement.style.color = '#303133'
+    contentElement.style.lineHeight = '1.6'
+
+    // 添加富文本编辑器样式
+    const style = document.createElement('style')
+    style.textContent = `
+      .pdf-content h1, .pdf-content h2, .pdf-content h3, .pdf-content h4, .pdf-content h5, .pdf-content h6 {
+        color: #303133;
+        margin-top: 16px;
+        margin-bottom: 8px;
+        font-weight: 600;
+      }
+      .pdf-content h1 { font-size: 24px; }
+      .pdf-content h2 { font-size: 20px; }
+      .pdf-content h3 { font-size: 18px; }
+      .pdf-content p { margin: 8px 0; }
+      .pdf-content ul, .pdf-content ol { padding-left: 20px; }
+      .pdf-content li { margin: 4px 0; }
+      .pdf-content blockquote {
+        border-left: 4px solid #409eff;
+        margin: 8px 0;
+        padding-left: 16px;
+        color: #606266;
+      }
+      .pdf-content a {
+        color: #409eff;
+        text-decoration: none;
+      }
+      .pdf-content table {
+        border-collapse: collapse;
+        width: 100%;
+        margin: 8px 0;
+      }
+      .pdf-content th, .pdf-content td {
+        border: 1px solid #dcdfe6;
+        padding: 8px;
+        text-align: left;
+      }
+      .pdf-content th {
+        background-color: #f5f7fa;
+      }
+      .pdf-content img {
+        max-width: 100%;
+        height: auto;
+      }
+    `
+    contentElement.className = 'pdf-content'
+    container.appendChild(style)
+    container.appendChild(contentElement)
+
+    // 配置 PDF 选项
+    const opt: any = {
+      margin: 10,
+      filename: `${title.value || 'document'}.pdf`,
+      image: { type: 'jpeg' as const, quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
+    }
+
+    // 生成并下载 PDF
+    await html2pdf().set(opt).from(container).save()
+    ElMessage.success('PDF 导出成功')
+  } catch (error) {
+    ElMessage.error('导出 PDF 失败，请稍后重试')
+  } finally {
+    exportingPdf.value = false
+  }
+}
+
+/**
+ * 处理 AI 概括操作
+ */
+const handleAISummary = async () => {
+  if (!content.value.trim()) {
+    ElMessage.warning('请先输入文档内容')
+    return
+  }
+
+  aiSummarizing.value = true
+
+  try {
+    const result = await documentApi.generateAISummary(content.value)
+    summary.value = result.summary
+
+    // 如果文档已保存，同时更新数据库中的概括
+    if (documentId.value) {
+      await documentApi.updateDocumentSummary(documentId.value, result.summary)
+    }
+
+    ElMessage.success('AI 概括生成成功')
+  } catch (error: any) {
+    if (error.response?.data?.detail) {
+      ElMessage.error(error.response.data.detail)
+    } else {
+      ElMessage.error('AI 概括失败，请稍后重试')
+    }
+  } finally {
+    aiSummarizing.value = false
+  }
+}
+
+/**
+ * 复制 AI 概括内容到剪贴板
+ */
+const copySummary = async () => {
+  if (!summary.value) {
+    ElMessage.warning('没有可复制的概括内容')
+    return
+  }
+
+  try {
+    await navigator.clipboard.writeText(summary.value)
+    ElMessage.success('概括内容已复制到剪贴板')
+  } catch (error) {
+    console.error('复制失败:', error)
+    ElMessage.error('复制失败，请手动复制')
   }
 }
 
@@ -616,17 +793,12 @@ const handleReset = () => {
 const initCollaboration = async () => {
   // 获取当前用户名
   currentUsername.value = localStorage.getItem('username') || '匿名用户'
-  console.log('[协作] ===== 当前用户信息 =====')
-  console.log('[协作] 用户名:', currentUsername.value)
-  console.log('[协作] 文档ID:', documentId.value)
 
   // 如果有文档ID，连接协作房间
   if (documentId.value) {
-    console.log('[协作] 正在连接到协作房间...')
     const connected = await collaborationService.connect(documentId.value, currentUsername.value)
 
     if (connected) {
-      console.log('[协作] ===== 成功连接到协作房间 =====')
       ElMessage.success('已连接到协作房间')
       // 连接成功后启动自动保存定时器
       startAutoSave()
@@ -653,10 +825,8 @@ const loadDocument = async () => {
       // 延迟一下确保 Quill 已处理完 v-model 绑定
       setTimeout(() => {
         isQuillInitializing.value = false
-        console.log('[协作] Quill 初始化状态已重置，内容加载完成')
       }, 100)
     } catch (error) {
-      console.error('加载文档失败:', error)
       // 即使加载失败，也要重置初始化状态
       isQuillInitializing.value = false
     }
@@ -671,16 +841,10 @@ const loadDocument = async () => {
 const setupCollaborationCallbacks = () => {
   // 内容变更回调
   collaborationService.onContentChangeCallback((delta, source) => {
-    console.log('[协作] ===== content_change 回调触发 =====')
-    console.log('[协作] delta:', JSON.stringify(delta))
-    console.log('[协作] source:', source)
-    console.log('[协作] 当前 isProcessingRemote:', isProcessingRemote.value)
-    console.log('[协作] 当前 isQuillInitializing:', isQuillInitializing.value)
 
     const quill = getQuillInstance()
     // 如果 Quill 正在初始化，则忽略
     if (isQuillInitializing.value) {
-      console.log('[协作] 忽略 content_change - Quill初始化中')
       return
     }
 
@@ -689,41 +853,29 @@ const setupCollaborationCallbacks = () => {
     isProcessingRemote.value = true
 
     // 应用 delta 到 Quill
-    console.log('[协作] 应用 delta 到 Quill')
     quill.updateContents(delta as any)
 
-    console.log('[协作] delta 应用完成')
 
     // 延迟重置标志，确保 Quill 完全处理完 delta
     setTimeout(() => {
       isProcessingRemote.value = false
-      console.log('[协作] 重置 isProcessingRemote = false')
-    }, 300)
+    }, 0)
   })
 
   // 光标位置回调
   collaborationService.onCursorPositionCallback((username, cursor) => {
-    console.log(`[协作] 收到 ${username} 的光标位置: index=${cursor.index}, length=${cursor.length}`)
-    console.log(`[协作] 当前光标数量:`, collaborationService.cursors.value.size)
-    console.log(`[协作] displayedCursors:`, displayedCursors.value)
   })
 
   // 用户加入回调
   collaborationService.onUserJoinedCallback((username, users) => {
-    console.log('[协作] ===== 用户加入 =====')
-    console.log('[协作] 新加入用户:', username)
-    console.log('[协作] 当前在线用户:', users)
     ElMessage.info(`${username} 加入了编辑`)
   })
 
   // 内容同步回调 - 当新用户加入时，后端发送当前文档内容
   collaborationService.onSyncContentCallback((syncContent) => {
-    console.log('[协作] ===== sync_content 回调触发 =====')
-    console.log('[协作] 同步内容长度:', syncContent?.length)
 
     const quill = getQuillInstance()
     if (!quill) {
-      console.log('[协作] Quill 未就绪，跳过内容同步')
       return
     }
 
@@ -742,17 +894,14 @@ const setupCollaborationCallbacks = () => {
     // 延迟重置初始化状态
     setTimeout(() => {
       isQuillInitializing.value = false
-      console.log('[协作] sync_content 处理完成')
     }, 500)
   })
 
   // 用户离开回调
   collaborationService.onUserLeftCallback((username, users) => {
-    console.log('[协作] ===== 用户离开 =====')
-    console.log('[协作] 离开用户:', username)
-    console.log('[协作] 当前在线用户:', users)
     ElMessage.info(`${username} 离开了编辑`)
   })
+
 }
 
 /**
@@ -1040,5 +1189,31 @@ onUnmounted(() => {
   .online-users {
     display: none;
   }
+}
+
+/* AI 概括区域样式 */
+.ai-summary-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px dashed #dcdfe6;
+}
+
+.summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.summary-content {
+  padding: 12px;
+  background-color: #fdf6ec;
+  border-radius: 6px;
+  border-left: 4px solid #e6a23c;
+  color: #303133;
+  font-size: 14px;
+  line-height: 1.6;
+  max-height: 200px;
+  overflow-y: auto;
 }
 </style>

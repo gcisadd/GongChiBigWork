@@ -18,7 +18,7 @@
           <!-- 富文本编辑器菜单项 -->
           <el-menu-item index="/editor">
             <el-icon><Edit /></el-icon>
-            <span>富文本编辑器</span>
+            <span>新建文档</span>
           </el-menu-item>
           <!-- 个人信息菜单项 -->
           <el-menu-item index="/profile">

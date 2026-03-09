@@ -15,11 +15,6 @@
             <el-icon><Document /></el-icon>
             <span>文档列表</span>
           </el-menu-item>
-          <!-- 富文本编辑器菜单项 -->
-          <el-menu-item index="/editor">
-            <el-icon><Edit /></el-icon>
-            <span>富文本编辑器</span>
-          </el-menu-item>
           <!-- 个人信息菜单项 -->
           <el-menu-item index="/profile">
             <el-icon><User /></el-icon>
@@ -114,7 +109,7 @@
 </template>
 
 <script setup lang="ts">
-import { Document, Edit, Message, Phone, SwitchButton, User } from '@element-plus/icons-vue'
+import { Document, Message, Phone, SwitchButton, User } from '@element-plus/icons-vue'
 import { type FormInstance, type FormRules, ElMessage, ElMessageBox } from 'element-plus'
 import { onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'

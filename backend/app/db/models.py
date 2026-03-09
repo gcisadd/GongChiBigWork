@@ -34,13 +34,14 @@ class Document(Base):
     """
     文档表模型
     
-    存储文档信息，包括标题和富文本内容
+    存储文档信息，包括标题、富文本内容和AI概括
     """
     __tablename__ = "documents"
     
     id = Column(Integer, primary_key=True, index=True, comment="文档ID")
     title = Column(String(200), nullable=False, comment="文档标题")
     content = Column(Text, nullable=True, comment="文档内容（HTML格式）")
+    summary = Column(Text, nullable=True, comment="AI概括内容")
     creator_id = Column(Integer, nullable=False, index=True, comment="创建者用户ID")
     creator_name = Column(String(50), nullable=False, comment="创建者用户名")
     created_at = Column(DateTime, default=datetime.utcnow, comment="创建时间")

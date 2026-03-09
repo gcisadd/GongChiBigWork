@@ -35,12 +35,15 @@ def get_db():
     
     @input 无
     @process 1. 创建数据库会话
-    #          2. 使用 yield 提供会话
-    #          3. 使用完毕后自动关闭会话
+              2. 使用 yield 提供会话
+              3. 使用完毕后自动关闭会话
     @output 返回数据库会话对象
     """
     db = SessionLocal()
     try:
         yield db
+    except Exception:
+        db.rollback()  # 如果有异常，回滚
+        raise
     finally:
         db.close()

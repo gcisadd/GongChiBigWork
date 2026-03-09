@@ -88,6 +88,9 @@ class CollaborationService {
   private onCursorPosition:
     | ((username: string, cursor: { index: number; length: number }) => void)
     | null = null
+  private onDocumentSaved:
+    | ((username: string, title: string, message: string) => void)
+    | null = null
 
   /**
    * 获取服务器 URL
@@ -114,7 +117,6 @@ class CollaborationService {
 
     // 生成 WebSocket URL
     this.serverUrl = this.getServerUrl()
-    console.log(`[协作] 正在连接到: ${this.serverUrl}`)
 
     return new Promise((resolve) => {
       try {
@@ -132,7 +134,6 @@ class CollaborationService {
         }, 10000)
 
         this.ws.onopen = () => {
-          console.log('[协作] WebSocket 连接已建立')
           clearTimeout(timeout)
 
           // 发送加入消息
@@ -150,10 +151,8 @@ class CollaborationService {
         }
 
         this.ws.onmessage = (event) => {
-          console.log('[协作] onmessage 原始数据:', event.data)
           try {
             const data: MessageData = JSON.parse(event.data)
-            console.log('[协作] 解析后的消息:', data)
             this.handleMessage(data)
           } catch (error) {
             console.error('[协作] 解析 WebSocket 消息失败:', error)
@@ -161,7 +160,6 @@ class CollaborationService {
         }
 
         this.ws.onclose = (event) => {
-          console.log(`[协作] WebSocket 连接已关闭: code=${event.code}, reason=${event.reason || '无'}`)
           this.isConnected.value = false
 
           // 保存错误信息
@@ -171,7 +169,6 @@ class CollaborationService {
 
           // 尝试重连（如果不是正常关闭）
           if (this.reconnectAttempts < this.maxReconnectAttempts && event.code !== 1000) {
-            console.log(`[协作] 准备重连...`)
             this.reconnect()
           }
         }
@@ -303,22 +300,28 @@ class CollaborationService {
   }
 
   /**
+   * 设置文档保存回调
+   */
+  onDocumentSavedCallback(
+    callback: (username: string, title: string, message: string) => void
+  ): void {
+    this.onDocumentSaved = callback
+  }
+
+  /**
    * 处理接收到的消息
    *
    * @param data - 消息数据
    */
   private handleMessage(data: MessageData): void {
-    console.log('[协作] 收到消息:', JSON.stringify(data))
 
     switch (data.type) {
       case 'user_joined':
-        console.log('[协作] 处理 user_joined:', data.username, '在线用户:', data.users)
         this.onlineUsers.value = data.users || []
         this.onUserJoined?.(data.username || '', this.onlineUsers.value)
         break
 
       case 'user_left':
-        console.log('[协作] 处理 user_left:', data.username)
         this.onlineUsers.value = data.users || []
         // 移除离开用户的光标
         if (data.username) {
@@ -328,14 +331,12 @@ class CollaborationService {
         break
 
       case 'content_change':
-        console.log('[协作] 收到 content_change:', JSON.stringify(data))
         if (data.delta && data.username !== this.username) {
           // 生成 delta 的唯一标识（用户名 + delta 内容）
           const deltaKey = `${data.username}-${JSON.stringify(data.delta)}`
 
           // 检查是否已经处理过这个 delta
           if (this.processedDeltas.has(deltaKey)) {
-            console.log('[协作] 跳过已处理的 delta:', deltaKey)
             break
           }
 
@@ -348,7 +349,6 @@ class CollaborationService {
           }, 10000)
 
           // 直接处理 delta
-          console.log('[协作] 处理 delta:', JSON.stringify(data.delta))
           this.onContentChange?.(data.delta, data.source || 'remote')
         }
         break
@@ -369,13 +369,11 @@ class CollaborationService {
         break
 
       case 'sync_users':
-        console.log('[协作] 处理 sync_users:', data.users)
         this.onlineUsers.value = data.users || []
         this.onSyncUsers?.(this.onlineUsers.value)
         break
 
       case 'sync_content':
-        console.log('[协作] 收到 sync_content, 内容长度:', data.content?.length)
         if (data.content) {
           this.onSyncContent?.(data.content)
         }
@@ -385,8 +383,18 @@ class CollaborationService {
         // 心跳响应
         break
 
+      case 'document_saved':
+        if (data.username && data.username !== this.username && data.title) {
+          // 通知其他用户文档已保存
+          this.onDocumentSaved?.(
+            data.username || '',
+            data.title,
+            data.message || `${data.username} 已保存文档`
+          )
+        }
+        break
+
       default:
-        console.log('[协作] 未知消息类型:', data.type)
     }
   }
 
@@ -397,7 +405,6 @@ class CollaborationService {
     this.reconnectAttempts++
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1)
 
-    console.log(`[协作] 尝试重连（${this.reconnectAttempts}/${this.maxReconnectAttempts}），${delay}ms 后...`)
     this.connectionError.value = `正在重连 (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`
 
     setTimeout(() => {
