@@ -30,6 +30,7 @@ type MessageType =
   | 'sync_content'
   | 'ping'
   | 'pong'
+  | 'document_saved'
 
 /**
  * 消息数据接口
@@ -45,6 +46,9 @@ interface MessageData {
     index: number
     length: number
   }
+  trigger_save?: boolean  // 标记是否触发保存
+  title?: string  // 文档标题（用于 document_saved 消息）
+  message?: string  // 消息内容（用于 document_saved 消息）
 }
 
 /**
@@ -81,8 +85,8 @@ class CollaborationService {
   // 消息回调
   private onContentChange: ((delta: Record<string, unknown>, source: string) => void) | null =
     null
-  private onUserJoined: ((username: string, users: string[]) => void) | null = null
-  private onUserLeft: ((username: string, users: string[]) => void) | null = null
+  private onUserJoined: ((username: string, users: string[], triggerSave: boolean) => void) | null = null
+  private onUserLeft: ((username: string, users: string[], triggerSave: boolean) => void) | null = null
   private onSyncUsers: ((users: string[]) => void) | null = null
   private onSyncContent: ((content: string) => void) | null = null
   private onCursorPosition:
@@ -91,6 +95,8 @@ class CollaborationService {
   private onDocumentSaved:
     | ((username: string, title: string, message: string) => void)
     | null = null
+  // 用户加入/离开时触发保存的回调
+  private onTriggerSave: (() => void) | null = null
 
   /**
    * 获取服务器 URL
@@ -265,14 +271,14 @@ class CollaborationService {
   /**
    * 设置用户加入回调
    */
-  onUserJoinedCallback(callback: (username: string, users: string[]) => void): void {
+  onUserJoinedCallback(callback: (username: string, users: string[], triggerSave: boolean) => void): void {
     this.onUserJoined = callback
   }
 
   /**
    * 设置用户离开回调
    */
-  onUserLeftCallback(callback: (username: string, users: string[]) => void): void {
+  onUserLeftCallback(callback: (username: string, users: string[], triggerSave: boolean) => void): void {
     this.onUserLeft = callback
   }
 
@@ -291,7 +297,7 @@ class CollaborationService {
   }
 
   /**
-   * 设置光标位置回调
+   * 设置请求内容回调（当其他用户加入时，请求当前内容）
    */
   onCursorPositionCallback(
     callback: (username: string, cursor: { index: number; length: number }) => void
@@ -309,6 +315,13 @@ class CollaborationService {
   }
 
   /**
+   * 设置用户加入/离开时触发保存的回调
+   */
+  onTriggerSaveCallback(callback: () => void): void {
+    this.onTriggerSave = callback
+  }
+
+  /**
    * 处理接收到的消息
    *
    * @param data - 消息数据
@@ -318,7 +331,13 @@ class CollaborationService {
     switch (data.type) {
       case 'user_joined':
         this.onlineUsers.value = data.users || []
-        this.onUserJoined?.(data.username || '', this.onlineUsers.value)
+        // 获取 trigger_save 标记
+        const joinTriggerSave = data.trigger_save === true
+        this.onUserJoined?.(data.username || '', this.onlineUsers.value, joinTriggerSave)
+        // 如果收到保存触发请求，执行保存回调
+        if (joinTriggerSave && this.onTriggerSave) {
+          this.onTriggerSave()
+        }
         break
 
       case 'user_left':
@@ -327,7 +346,13 @@ class CollaborationService {
         if (data.username) {
           this.cursors.value.delete(data.username)
         }
-        this.onUserLeft?.(data.username || '', this.onlineUsers.value)
+        // 获取 trigger_save 标记
+        const leaveTriggerSave = data.trigger_save === true
+        this.onUserLeft?.(data.username || '', this.onlineUsers.value, leaveTriggerSave)
+        // 如果收到保存触发请求，执行保存回调
+        if (leaveTriggerSave && this.onTriggerSave) {
+          this.onTriggerSave()
+        }
         break
 
       case 'content_change':

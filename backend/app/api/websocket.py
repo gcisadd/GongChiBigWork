@@ -74,16 +74,12 @@ class ConnectionManager:
         except Exception as e:
             print(f"[WebSocket] 获取文档内容失败: {e}")
 
-        # 广播用户加入消息
+        # 广播用户加入消息，并请求其他用户保存文档以便同步给新成员
         print(f"[WebSocket] 准备广播 user_joined, 当前在线用户: {list(self.online_users[document_id])}")
-        await self.broadcast_to_document(
+        await self.broadcast_user_joined(
             document_id,
-            {
-                "type": "user_joined",
-                "username": username,
-                "users": list(self.online_users[document_id]),
-            },
-            websocket,
+            username,
+            list(self.online_users[document_id]),
         )
         print(f"[WebSocket] 广播完成")
 
@@ -209,7 +205,51 @@ class ConnectionManager:
             None,  # 发送给包括发送者的所有用户
         )
 
-    def get_online_users(self, document_id: int) -> list:
+    async def broadcast_user_left(
+        self, document_id: int, username: str, users: list
+    ):
+        """
+        广播用户离开消息，并请求其他用户保存文档
+
+        @input document_id - 文档ID
+        @input username - 离开的用户名
+        @input users - 离开后的在线用户列表
+        @process 广播用户离开消息，同时请求其他用户保存当前文档
+        @output 其他用户收到保存请求
+        """
+        print(f"[WebSocket] 广播用户离开: {username}, 请求其他用户保存文档")
+        await self.broadcast_to_document(
+            document_id,
+            {
+                "type": "user_left",
+                "username": username,
+                "users": users,
+                "trigger_save": True,  # 标记请求其他用户保存
+            },
+        )
+
+    async def broadcast_user_joined(
+        self, document_id: int, username: str, users: list
+    ):
+        """
+        广播用户加入消息，并请求其他用户保存文档推送给新成员
+
+        @input document_id - 文档ID
+        @input username - 加入的用户名
+        @input users - 加入后的在线用户列表
+        @process 广播用户加入消息，同时请求其他用户保存当前文档
+        @output 其他用户收到保存请求，用于同步给新成员
+        """
+        print(f"[WebSocket] 广播用户加入: {username}, 请求其他用户保存文档")
+        await self.broadcast_to_document(
+            document_id,
+            {
+                "type": "user_joined",
+                "username": username,
+                "users": users,
+                "trigger_save": True,  # 标记请求其他用户保存
+            },
+        )
         """
         获取指定文档的在线用户列表
 
@@ -294,6 +334,7 @@ async def websocket_collaborate(websocket: WebSocket, document_id: int):
                 elif message_type == "ping":
                     # 心跳包
                     await websocket.send_json({"type": "pong"})
+
                 else:
                     print(f"[WebSocket] 收到未知消息类型: {message_type}")
 
@@ -314,15 +355,12 @@ async def websocket_collaborate(websocket: WebSocket, document_id: int):
         if username is not None:
             manager.disconnect(websocket, document_id, username)
 
-            # 广播用户离开消息
+            # 广播用户离开消息，并请求其他用户保存文档
             if document_id in manager.active_connections:
-                await manager.broadcast_to_document(
+                await manager.broadcast_user_left(
                     document_id,
-                    {
-                        "type": "user_left",
-                        "username": username,
-                        "users": manager.get_online_users(document_id),
-                    },
+                    username,
+                    manager.get_online_users(document_id),
                 )
 
 

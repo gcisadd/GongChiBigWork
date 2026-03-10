@@ -64,25 +64,16 @@
         <el-table-column prop="title" label="文档名" min-width="200" />
         <el-table-column prop="creator_name" label="创建者" min-width="150" />
         <el-table-column prop="modified_time" label="修改时间" min-width="200" />
-        <el-table-column label="操作" min-width="280" fixed="right">
+        <el-table-column label="操作" min-width="200" fixed="right">
           <template #default="scope">
             <el-button
-              type="success"
+              type="primary"
               size="large"
               :icon="Connection"
               class="action-button"
               @click="handleCollabEdit(scope.row)"
             >
-              协作
-            </el-button>
-            <el-button
-              type="primary"
-              size="large"
-              :icon="Edit"
-              class="action-button"
-              @click="handleEdit(scope.row)"
-            >
-              编辑
+              协作编辑
             </el-button>
             <el-button
               type="danger"
@@ -245,24 +236,6 @@ const handleSelectionChange = (selection: DocumentRow[]) => {
  */
 const handleAdd = () => {
   router.push('/editor')
-}
-
-/**
- * 处理编辑文档操作
- *
- * @input 用户点击编辑按钮
- * @process 1. 获取当前文档数据
- *          2. 通过路由跳转到富文本编辑器页面，并在查询参数中携带文档 ID
- *          3. 后续可在编辑器页面根据 ID 加载对应文档内容（目前仅跳转，不做数据加载）
- * @output 跳转到富文本编辑器页面
- */
-const handleEdit = (row: DocumentRow) => {
-  router.push({
-    path: '/editor',
-    query: {
-      id: String(row.id),
-    },
-  })
 }
 
 /**

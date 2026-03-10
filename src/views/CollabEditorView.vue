@@ -483,6 +483,38 @@ const autoSave = async () => {
 }
 
 /**
+ * 触发自动保存（用于其他用户加入/离开时）
+ * 保存后，后端会自动同步给其他成员
+ */
+const triggerAutoSave = async () => {
+  // 如果没有文档ID或未连接，不保存
+  if (!documentId.value || !isConnected.value) {
+    return
+  }
+
+  // 如果没有内容，也不强制保存
+  if (!title.value.trim() && !content.value.trim()) {
+    return
+  }
+
+  // 标记为自动保存中
+  isAutoSaving.value = true
+
+  try {
+    await documentApi.updateDocument(documentId.value, {
+      title: title.value,
+      content: content.value,
+    })
+    lastSaveTime.value = new Date()
+    console.log('[协作] 触发保存成功（用户加入/离开事件）')
+  } catch (error) {
+    console.error('[协作] 触发保存失败:', error)
+  } finally {
+    isAutoSaving.value = false
+  }
+}
+
+/**
  * 启动自动保存定时器
  */
 const startAutoSave = () => {
@@ -491,7 +523,24 @@ const startAutoSave = () => {
     if (documentId.value && isConnected.value) {
       autoSave()
     }
-  }, 1000)
+  }, 5000)
+}
+
+/**
+ * 页面离开前自动保存
+ */
+const handleBeforeUnload = async (e: BeforeUnloadEvent) => {
+  // 如果有未保存的内容，先尝试保存
+  if (documentId.value && title.value.trim()) {
+    try {
+      await documentApi.updateDocument(documentId.value, {
+        title: title.value,
+        content: content.value,
+      })
+    } catch (error) {
+      console.error('[协作] 页面离开前自动保存失败:', error)
+    }
+  }
 }
 
 /**
@@ -848,6 +897,22 @@ const setupCollaborationCallbacks = () => {
       return
     }
 
+    // 如果是保存操作触发的全量同步，从数据库获取最新内容
+    if (source === 'save') {
+      // 重新从后端获取最新文档内容
+      documentApi.getDocument(documentId.value).then((doc) => {
+        if (doc && doc.content) {
+          isQuillInitializing.value = true
+          quill.root.innerHTML = doc.content
+          content.value = doc.content
+          setTimeout(() => {
+            isQuillInitializing.value = false
+          }, 500)
+        }
+      })
+      return
+    }
+
     // 即使正在处理远程变更，也要处理新的 delta
     // 开始处理远程变更
     isProcessingRemote.value = true
@@ -867,8 +932,12 @@ const setupCollaborationCallbacks = () => {
   })
 
   // 用户加入回调
-  collaborationService.onUserJoinedCallback((username, users) => {
+  collaborationService.onUserJoinedCallback((username, users, triggerSave) => {
     ElMessage.info(`${username} 加入了编辑`)
+    // 如果收到保存触发请求，触发保存
+    if (triggerSave) {
+      triggerAutoSave()
+    }
   })
 
   // 内容同步回调 - 当新用户加入时，后端发送当前文档内容
@@ -898,8 +967,17 @@ const setupCollaborationCallbacks = () => {
   })
 
   // 用户离开回调
-  collaborationService.onUserLeftCallback((username, users) => {
+  collaborationService.onUserLeftCallback((username, users, triggerSave) => {
     ElMessage.info(`${username} 离开了编辑`)
+    // 如果收到保存触发请求，触发保存
+    if (triggerSave) {
+      triggerAutoSave()
+    }
+  })
+
+  // 保存触发回调 - 当其他用户加入/离开时，后端请求保存
+  collaborationService.onTriggerSaveCallback(() => {
+    triggerAutoSave()
   })
 
 }
@@ -923,6 +1001,9 @@ onMounted(async () => {
   if (isConnected.value) {
     startAutoSave()
   }
+
+  // 添加页面离开事件监听
+  window.addEventListener('beforeunload', handleBeforeUnload)
 })
 
 /**
@@ -937,6 +1018,9 @@ onUnmounted(() => {
 
   // 断开协作连接
   collaborationService.disconnect()
+
+  // 移除页面离开事件监听
+  window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 </script>
 

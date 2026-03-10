@@ -217,10 +217,18 @@ async def update_document(
 
     # 广播文档保存消息给协作用户（添加异常处理，避免广播失败影响文档保存）
     try:
+        # 广播保存通知
         await manager.broadcast_document_saved(
             document_id,
             current_user.username,
             document.title
+        )
+        # 同时广播最新内容，确保所有协作者看到最新版本
+        await manager.broadcast_content_change(
+            document_id,
+            current_user.username,
+            {"ops": []},  # 空 delta 表示全量内容
+            "save"
         )
     except Exception as e:
         print(f"[API] 广播文档保存消息失败: {e}")
