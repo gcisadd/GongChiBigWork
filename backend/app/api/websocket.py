@@ -7,6 +7,7 @@ WebSocket 服务模块
 
 from collections import defaultdict
 from datetime import datetime
+import asyncio
 from typing import Dict, Set
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -47,41 +48,64 @@ class ConnectionManager:
         @input document_id - 文档ID
         @input username - 用户名
         @process 1. 将连接添加到文档房间
-                  2. 发送当前文档内容给新用户
-                  3. 广播用户加入消息
+                  2. 广播用户加入消息，请求其他用户保存
+                  3. 新用户会发送 save_done 请求同步内容
         @output 建立连接，在线用户列表更新
         """
         print(f"[WebSocket] 用户 {username} 已连接, document_id={document_id}")
-        self.active_connections[document_id].add(websocket)
-        print(f"[WebSocket] 当前连接数: {len(self.active_connections[document_id])}")
-        self.online_users[document_id].add(username)
 
-        # 发送当前文档内容给新加入的用户（让他们看到已有内容）
-        # 注意：这里使用独立的数据库会话，避免影响主请求的事务
+        # 先通知房间内老用户保存一次（新成员此时还没正式入房，避免其收到 trigger_save 后误保存覆盖）
+        existing_users = list(self.online_users.get(document_id, set()))
+        existing_connections = self.active_connections.get(document_id, set())
+        if existing_connections:
+            print(f"[WebSocket] 新成员加入前请求老用户保存, 当前在线={existing_users}")
+            await self.broadcast_to_document(
+                document_id,
+                {
+                    "type": "prepare_sync",
+                    "username": username,
+                    "users": existing_users,
+                    "trigger_save": True,
+                },
+            )
+
+        # 等待 1 秒给老用户完成保存落库
+        await asyncio.sleep(1.0)
+
+        # 正式把新成员加入房间
+        self.active_connections[document_id].add(websocket)
+        self.online_users[document_id].add(username)
+        users_after_join = list(self.online_users[document_id])
+        print(f"[WebSocket] 新成员已入房, 连接数={len(self.active_connections[document_id])}, 在线={users_after_join}")
+
+        # 给新成员推送数据库中的最新内容（作为首次同步）
         try:
             from app.db.database import SessionLocal
             db = SessionLocal()
             try:
                 document = db.query(Document).filter(Document.id == document_id).first()
-                if document and document.content:
-                    print(f"[WebSocket] 发送当前文档内容给新用户, 内容长度={len(document.content)}")
-                    await websocket.send_json({
+                await websocket.send_json(
+                    {
                         "type": "sync_content",
-                        "content": document.content,
-                    })
+                        "content": document.content if document and document.content else "",
+                    }
+                )
             finally:
-                db.close()  # 关闭会话，不commit（只读操作）
+                db.close()
         except Exception as e:
-            print(f"[WebSocket] 获取文档内容失败: {e}")
+            print(f"[WebSocket] 推送首次 sync_content 失败: {e}")
 
-        # 广播用户加入消息，并请求其他用户保存文档以便同步给新成员
-        print(f"[WebSocket] 准备广播 user_joined, 当前在线用户: {list(self.online_users[document_id])}")
-        await self.broadcast_user_joined(
+        # 广播用户加入（不触发保存，仅用于更新在线用户列表）
+        await self.broadcast_to_document(
             document_id,
-            username,
-            list(self.online_users[document_id]),
+            {
+                "type": "user_joined",
+                "username": username,
+                "users": users_after_join,
+                "trigger_save": False,
+            },
+            exclude=None,
         )
-        print(f"[WebSocket] 广播完成")
 
     def disconnect(self, websocket: WebSocket, document_id: int, username: str):
         """
@@ -182,7 +206,7 @@ class ConnectionManager:
         )
 
     async def broadcast_document_saved(
-        self, document_id: int, username: str, title: str
+        self, document_id: int, username: str, title: str, exclude: WebSocket | None = None
     ):
         """
         广播文档保存消息
@@ -190,7 +214,8 @@ class ConnectionManager:
         @input document_id - 文档ID
         @input username - 保存文档的用户名
         @input title - 文档标题
-        @process 广播保存消息给所有用户
+        @input exclude - 要排除的连接（发送者）
+        @process 广播保存消息给除发送者外的其他用户
         @output 其他用户收到保存通知
         """
         print(f"[WebSocket] 广播文档保存: username={username}, title={title}")
@@ -202,7 +227,7 @@ class ConnectionManager:
                 "title": title,
                 "message": f"用户 {username} 已保存文档: {title}",
             },
-            None,  # 发送给包括发送者的所有用户
+            exclude,  # 排除发送者，避免发送者收到自己的保存消息导致内容被覆盖
         )
 
     async def broadcast_user_left(
@@ -229,7 +254,7 @@ class ConnectionManager:
         )
 
     async def broadcast_user_joined(
-        self, document_id: int, username: str, users: list
+        self, document_id: int, username: str, users: list, exclude: WebSocket | None = None
     ):
         """
         广播用户加入消息，并请求其他用户保存文档推送给新成员
@@ -249,7 +274,10 @@ class ConnectionManager:
                 "users": users,
                 "trigger_save": True,  # 标记请求其他用户保存
             },
+            exclude=exclude,
         )
+
+    def get_online_users(self, document_id: int) -> list[str]:
         """
         获取指定文档的在线用户列表
 
@@ -334,6 +362,38 @@ async def websocket_collaborate(websocket: WebSocket, document_id: int):
                 elif message_type == "ping":
                     # 心跳包
                     await websocket.send_json({"type": "pong"})
+
+                elif message_type == "user_left":
+                    # 用户主动离开 - 触发保存并广播给其他用户
+                    trigger_save = data.get("trigger_save", True)
+                    print(f"[WebSocket] 收到 user_left, username={username}, trigger_save={trigger_save}")
+                    # 广播用户离开消息，并请求其他用户保存文档
+                    if document_id in manager.active_connections:
+                        await manager.broadcast_user_left(
+                            document_id,
+                            username,
+                            manager.get_online_users(document_id),
+                        )
+
+                elif message_type == "save_done":
+                    # 兼容旧逻辑：客户端请求同步内容
+                    # 现在首次同步由 connect() 主动推送；这里保留为兜底/手动触发同步
+                    print(f"[WebSocket] 收到 save_done(兜底同步请求), username={username}")
+                    try:
+                        from app.db.database import SessionLocal
+                        db = SessionLocal()
+                        try:
+                            document = db.query(Document).filter(Document.id == document_id).first()
+                            await websocket.send_json(
+                                {
+                                    "type": "sync_content",
+                                    "content": document.content if document and document.content else "",
+                                }
+                            )
+                        finally:
+                            db.close()
+                    except Exception as e:
+                        print(f"[WebSocket] 获取文档内容失败: {e}")
 
                 else:
                     print(f"[WebSocket] 收到未知消息类型: {message_type}")

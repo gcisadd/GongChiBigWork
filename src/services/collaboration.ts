@@ -23,6 +23,7 @@ type MessageType =
   | 'join'
   | 'user_joined'
   | 'user_left'
+  | 'prepare_sync'
   | 'content_change'
   | 'cursor_position'
   | 'sync_request'
@@ -31,6 +32,7 @@ type MessageType =
   | 'ping'
   | 'pong'
   | 'document_saved'
+  | 'save_done'  // 保存完成后请求同步内容
 
 /**
  * 消息数据接口
@@ -83,7 +85,7 @@ class CollaborationService {
   connectionError: Ref<string> = ref('')
 
   // 消息回调
-  private onContentChange: ((delta: Record<string, unknown>, source: string) => void) | null =
+  private onContentChange: ((delta: Record<string, unknown>, source: string, username: string) => void) | null =
     null
   private onUserJoined: ((username: string, users: string[], triggerSave: boolean) => void) | null = null
   private onUserLeft: ((username: string, users: string[], triggerSave: boolean) => void) | null = null
@@ -194,8 +196,18 @@ class CollaborationService {
 
   /**
    * 断开连接
+   * @param triggerSave - 是否在断开前触发保存（默认 true）
    */
-  disconnect(): void {
+  disconnect(triggerSave: boolean = true): void {
+    // 在断开连接前，发送离开消息并请求保存
+    if (triggerSave && this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.send({
+        type: 'user_left',
+        username: this.username,
+        trigger_save: true,  // 标记请求保存
+      })
+    }
+
     if (this.ws) {
       this.ws.close()
       this.ws = null
@@ -260,10 +272,20 @@ class CollaborationService {
   }
 
   /**
+   * 保存完成后请求同步内容
+   * 用于其他用户加入时，我们保存完后发送此消息请求最新内容
+   */
+  requestSyncAfterSave(): void {
+    this.send({
+      type: 'save_done',
+    })
+  }
+
+  /**
    * 设置内容变更回调
    */
   onContentChangeCallback(
-    callback: (delta: Record<string, unknown>, source: string) => void
+    callback: (delta: Record<string, unknown>, source: string, username: string) => void
   ): void {
     this.onContentChange = callback
   }
@@ -340,6 +362,14 @@ class CollaborationService {
         }
         break
 
+      case 'prepare_sync': {
+        // 服务端要求房间内老用户先保存一次，给新成员同步用
+        if (data.trigger_save === true && this.onTriggerSave) {
+          this.onTriggerSave()
+        }
+        break
+      }
+
       case 'user_left':
         this.onlineUsers.value = data.users || []
         // 移除离开用户的光标
@@ -373,8 +403,8 @@ class CollaborationService {
             this.processedDeltas.delete(deltaKey)
           }, 10000)
 
-          // 直接处理 delta
-          this.onContentChange?.(data.delta, data.source || 'remote')
+          // 直接处理 delta，传递 username 以便前端判断来源
+          this.onContentChange?.(data.delta, data.source || 'remote', data.username || '')
         }
         break
 

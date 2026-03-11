@@ -129,7 +129,12 @@
               />
 
               <!-- 富文本编辑器 -->
-              <div class="editor-container" style="position: relative;" ref="editorContainerRef">
+              <div
+                class="editor-container"
+                style="position: relative;"
+                ref="editorContainerRef"
+                v-loading="isSyncing"
+              >
                 <QuillEditor
                   ref="editorRef"
                   v-model:content="content"
@@ -200,10 +205,10 @@
 import { CircleCheck, CircleClose, Connection, Document, Download, MagicStick, User } from '@element-plus/icons-vue'
 import { QuillEditor } from '@vueup/vue-quill'
 import '@vueup/vue-quill/dist/vue-quill.snow.css'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import html2pdf from 'html2pdf.js'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { documentApi } from '../services/api'
 import collaborationService from '../services/collaboration'
 
@@ -350,6 +355,12 @@ let autoSaveTimer: ReturnType<typeof setInterval> | null = null
 // 是否正在自动保存
 const isAutoSaving = ref(false)
 
+// 新成员加入时的首次同步 loading（拿到 sync_content 后关闭）
+const isSyncing = ref(false)
+
+// 自动保存是否已启动（避免重复启动）
+let autoSaveStarted = false
+
 // 上次保存时间
 const lastSaveTime = ref<Date | null>(null)
 
@@ -384,6 +395,17 @@ const currentUsername = ref('')
 
 // Quill编辑器初始化状态（防止初始化时重复发送内容）
 const isQuillInitializing = ref(true)
+
+// 文档是否被修改过
+const hasUnsavedChanges = ref(false)
+
+// 监听标题变化，标记文档已修改
+watch(title, (newVal, oldVal) => {
+  // 如果不是初始加载（即 oldVal 有值），则标记为已修改
+  if (oldVal !== null && oldVal !== undefined && oldVal !== '') {
+    hasUnsavedChanges.value = true
+  }
+})
 
 /**
  * 获取用户颜色
@@ -464,8 +486,16 @@ const getCursorStyle = (cursor: CollaboratorInfo, username: string) => {
  * 自动保存文档
  */
 const autoSave = async () => {
+  // 首次同步期间不允许自动保存，避免覆盖数据库导致新成员不同步
+  if (isSyncing.value) return
   if (!title.value.trim() || !documentId.value) {
     return
+  }
+
+  // 保存前从 Quill 获取最新 HTML，避免 v-model/输入法组合态导致落库内容缺失
+  const quill = getQuillInstance()
+  if (quill?.root?.innerHTML != null) {
+    content.value = quill.root.innerHTML
   }
 
   isAutoSaving.value = true
@@ -492,8 +522,48 @@ const triggerAutoSave = async () => {
     return
   }
 
+  // 保存前从 Quill 获取最新 HTML，避免用户加入/离开触发保存时内容丢尾
+  const quill = getQuillInstance()
+  if (quill?.root?.innerHTML != null) {
+    content.value = quill.root.innerHTML
+  }
+
   // 如果没有内容，也不强制保存
   if (!title.value.trim() && !content.value.trim()) {
+    return
+  }
+
+  // 如果正在自动保存中，等待保存完成后再执行保存
+  // 这样可以确保其他用户加入/离开时能获取到最新内容
+  if (isAutoSaving.value) {
+    console.log('[协作] 正在保存中，等待完成后重新保存...')
+    // 等待最多 3 秒，让当前保存完成
+    let waitTime = 0
+    while (isAutoSaving.value && waitTime < 3000) {
+      await new Promise(resolve => setTimeout(resolve, 100))
+      waitTime += 100
+    }
+    // 等待完成后，再执行一次保存确保最新
+    if (!isAutoSaving.value) {
+      isAutoSaving.value = true
+      try {
+        // 再次取最新内容（等待期间编辑器可能继续变化）
+        const quill = getQuillInstance()
+        if (quill?.root?.innerHTML != null) {
+          content.value = quill.root.innerHTML
+        }
+        await documentApi.updateDocument(documentId.value, {
+          title: title.value,
+          content: content.value,
+        })
+        lastSaveTime.value = new Date()
+        console.log('[协作] 等待后重新保存成功')
+      } catch (error) {
+        console.error('[协作] 等待后重新保存失败:', error)
+      } finally {
+        isAutoSaving.value = false
+      }
+    }
     return
   }
 
@@ -518,9 +588,11 @@ const triggerAutoSave = async () => {
  * 启动自动保存定时器
  */
 const startAutoSave = () => {
+  if (autoSaveStarted) return
+  autoSaveStarted = true
   // 每 5 秒自动保存
   autoSaveTimer = setInterval(() => {
-    if (documentId.value && isConnected.value) {
+    if (documentId.value && isConnected.value && !isSyncing.value) {
       autoSave()
     }
   }, 5000)
@@ -533,6 +605,10 @@ const handleBeforeUnload = async (e: BeforeUnloadEvent) => {
   // 如果有未保存的内容，先尝试保存
   if (documentId.value && title.value.trim()) {
     try {
+      const quill = getQuillInstance()
+      if (quill?.root?.innerHTML != null) {
+        content.value = quill.root.innerHTML
+      }
       await documentApi.updateDocument(documentId.value, {
         title: title.value,
         content: content.value,
@@ -625,17 +701,23 @@ const handleMenuSelect = (index: string) => {
 /**
  * 保存文档
  */
-const handleSave = async () => {
+const handleSave = async (): Promise<boolean> => {
   console.log('[保存] 开始保存文档, documentId:', documentId.value, 'title:', title.value)
+
+  // 手动保存前强制从编辑器同步最新 HTML（避免 v-model 延迟）
+  const quill = getQuillInstance()
+  if (quill?.root?.innerHTML != null) {
+    content.value = quill.root.innerHTML
+  }
 
   if (!title.value.trim()) {
     ElMessage.warning('请输入文档标题')
-    return
+    return false
   }
 
   if (!content.value.trim()) {
     ElMessage.warning('请输入文档内容')
-    return
+    return false
   }
 
   saving.value = true
@@ -661,9 +743,11 @@ const handleSave = async () => {
     }
 
     ElMessage.success('文档保存成功')
+    return true
   } catch (error) {
     console.error('[保存] 保存文档失败:', error)
     ElMessage.error('保存文档失败，请稍后重试')
+    return false
   } finally {
     saving.value = false
   }
@@ -845,14 +929,17 @@ const initCollaboration = async () => {
 
   // 如果有文档ID，连接协作房间
   if (documentId.value) {
+    // 新成员连接后会收到服务端推送的 sync_content，再解除 loading
+    isSyncing.value = true
     const connected = await collaborationService.connect(documentId.value, currentUsername.value)
 
     if (connected) {
       ElMessage.success('已连接到协作房间')
-      // 连接成功后启动自动保存定时器
-      startAutoSave()
+      // 注意：不要在首次同步完成前自动保存，避免覆盖数据库导致新成员不同步
+      // 如果房间里没有其他人，服务端也会推一次 sync_content（可能为空/已有内容），回调里会关闭 loading
     } else {
       ElMessage.warning('连接协作房间失败')
+      isSyncing.value = false
     }
   }
 }
@@ -931,13 +1018,22 @@ const setupCollaborationCallbacks = () => {
   collaborationService.onCursorPositionCallback((username, cursor) => {
   })
 
-  // 用户加入回调
-  collaborationService.onUserJoinedCallback((username, users, triggerSave) => {
+  // 用户加入回调 - 新用户加入时，触发自动保存
+  collaborationService.onUserJoinedCallback((username, users) => {
     ElMessage.info(`${username} 加入了编辑`)
-    // 如果收到保存触发请求，触发保存
-    if (triggerSave) {
-      triggerAutoSave()
+    // 关键：如果是“自己加入”，不要触发保存（否则会用自己本地旧内容覆盖数据库）
+    // 自己加入时只负责等待其他成员保存完后，再请求同步最新内容
+    if (username === currentUsername.value) {
+      // 等待一段时间让其他用户完成保存，然后请求同步
+      setTimeout(() => {
+        console.log('[协作] 请求同步最新内容')
+        collaborationService.requestSyncAfterSave()
+      }, 3500)
+      return
     }
+
+    // 其他用户加入时，由本客户端触发保存以同步最新内容
+    triggerAutoSave()
   })
 
   // 内容同步回调 - 当新用户加入时，后端发送当前文档内容
@@ -960,19 +1056,21 @@ const setupCollaborationCallbacks = () => {
     // 同时更新 v-model
     content.value = syncContent || ''
 
+    // 首次同步完成，关闭 loading 并启动自动保存
+    isSyncing.value = false
+    startAutoSave()
+
     // 延迟重置初始化状态
     setTimeout(() => {
       isQuillInitializing.value = false
     }, 500)
   })
 
-  // 用户离开回调
-  collaborationService.onUserLeftCallback((username, users, triggerSave) => {
+  // 用户离开回调 - 用户离开时，触发自动保存
+  collaborationService.onUserLeftCallback((username, users) => {
     ElMessage.info(`${username} 离开了编辑`)
-    // 如果收到保存触发请求，触发保存
-    if (triggerSave) {
-      triggerAutoSave()
-    }
+    // 有用户离开时，触发保存以同步最新内容
+    triggerAutoSave()
   })
 
   // 保存触发回调 - 当其他用户加入/离开时，后端请求保存
@@ -1007,17 +1105,84 @@ onMounted(async () => {
 })
 
 /**
+ * 路由守卫 - 离开页面时确认是否保存
+ */
+const beforeRouteLeave = async () => {
+  // 如果没有未保存的修改，直接放行
+  if (!hasUnsavedChanges.value) {
+    return true
+  }
+
+  // 显示确认对话框
+  try {
+    await ElMessageBox.confirm(
+      '您有未保存的内容，确定要离开吗？',
+      '提示',
+      {
+        confirmButtonText: '保存并离开',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    )
+
+    // 用户点击"保存并离开"
+    // 先关闭确认框，再执行保存（避免 UI 冲突）
+    ElMessageBox.close()
+
+    // 等待 DOM 更新后执行保存
+    await nextTick()
+
+    const saveSuccess = await handleSave()
+
+    // 只有保存成功才允许离开
+    if (saveSuccess) {
+      hasUnsavedChanges.value = false
+      ElMessage.success('文档已保存')
+      return true
+    } else {
+      // 保存失败，阻止跳转
+      return false
+    }
+  } catch {
+    // 用户点击"取消"或关闭对话框，阻止跳转
+    ElMessageBox.close()
+    return false
+  }
+}
+
+// 使用路由守卫
+onBeforeRouteLeave(beforeRouteLeave)
+
+/**
  * 组件卸载
  */
-onUnmounted(() => {
+onUnmounted(async () => {
   // 清除自动保存定时器
   if (autoSaveTimer) {
     clearInterval(autoSaveTimer)
     autoSaveTimer = null
   }
 
-  // 断开协作连接
-  collaborationService.disconnect()
+  // 在断开协作连接前，先触发保存
+  // 这样可以确保用户离开时内容被保存到数据库
+  if (documentId.value && (title.value.trim() || content.value.trim())) {
+    try {
+      const quill = getQuillInstance()
+      if (quill?.root?.innerHTML != null) {
+        content.value = quill.root.innerHTML
+      }
+      await documentApi.updateDocument(documentId.value, {
+        title: title.value,
+        content: content.value,
+      })
+      console.log('[协作] 页面卸载时自动保存成功')
+    } catch (error) {
+      console.error('[协作] 页面卸载时自动保存失败:', error)
+    }
+  }
+
+  // 断开协作连接（传入 false 避免重复触发保存，因为我们已经在上面保存了）
+  collaborationService.disconnect(false)
 
   // 移除页面离开事件监听
   window.removeEventListener('beforeunload', handleBeforeUnload)
