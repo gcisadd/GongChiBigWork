@@ -172,17 +172,6 @@
               </div>
             </div>
 
-            <!-- 右侧预览区域 -->
-            <div class="preview-wrapper">
-              <div class="preview-header">
-                <span class="preview-title">实时预览</span>
-                <el-tag type="info" size="small">只读</el-tag>
-              </div>
-              <h3 class="preview-document-title">
-                {{ title || "（未命名文档）" }}
-              </h3>
-              <div class="preview-content" v-html="content || emptyContentPlaceholder" />
-            </div>
           </div>
         </el-card>
       </el-main>
@@ -376,6 +365,18 @@ const displayedCursors = computed(() => {
   return result;
 });
 
+// 光标布局版本号：用于在窗口/容器尺寸变化时，强制重新计算 getCursorStyle()
+const cursorLayoutVersion = ref(0);
+let cursorLayoutRaf: number | null = null;
+let cursorResizeObserver: ResizeObserver | null = null;
+const invalidateCursorLayout = () => {
+  if (cursorLayoutRaf != null) return;
+  cursorLayoutRaf = window.requestAnimationFrame(() => {
+    cursorLayoutRaf = null;
+    cursorLayoutVersion.value++;
+  });
+};
+
 // 连接错误信息
 const connectionError = computed(() => collaborationService.connectionError.value);
 
@@ -431,6 +432,9 @@ const getUserColor = (username: string): string => {
  * 获取光标样式
  */
 const getCursorStyle = (cursor: CollaboratorInfo, username: string) => {
+  // 读取布局版本号，确保 resize/布局变化时会重新计算光标位置
+  void cursorLayoutVersion.value;
+
   if (!cursor.cursor) {
     return {};
   }
@@ -1148,6 +1152,15 @@ onMounted(async () => {
 
   // 添加页面离开事件监听
   window.addEventListener("beforeunload", handleBeforeUnload);
+
+  // 窗口/容器尺寸变化时，重新计算远程光标位置
+  window.addEventListener("resize", invalidateCursorLayout, { passive: true });
+  // 编辑器容器尺寸变化（例如布局变化）也触发
+  if (typeof ResizeObserver !== "undefined") {
+    cursorResizeObserver = new ResizeObserver(() => invalidateCursorLayout());
+    const el = editorContainerRef.value as HTMLElement | null;
+    if (el) cursorResizeObserver.observe(el);
+  }
 });
 
 /**
@@ -1209,6 +1222,17 @@ onUnmounted(async () => {
   if (sendCursorTimer) {
     clearTimeout(sendCursorTimer);
     sendCursorTimer = null;
+  }
+
+  // 清除光标布局刷新相关资源
+  window.removeEventListener("resize", invalidateCursorLayout as any);
+  if (cursorLayoutRaf != null) {
+    window.cancelAnimationFrame(cursorLayoutRaf);
+    cursorLayoutRaf = null;
+  }
+  if (cursorResizeObserver) {
+    cursorResizeObserver.disconnect();
+    cursorResizeObserver = null;
   }
 
   // 在断开协作连接前，先触发保存
@@ -1357,11 +1381,11 @@ onUnmounted(async () => {
   white-space: nowrap;
 }
 
-/* 编辑器内容区域：左右布局 */
+/* 编辑器内容区域：单列全宽布局 */
 .editor-content {
   display: flex;
-  flex-direction: row;
-  gap: 20px;
+  flex-direction: column;
+  gap: 16px;
   flex: 1;
 }
 
@@ -1379,7 +1403,8 @@ onUnmounted(async () => {
 
 /* 富文本编辑器 */
 .rich-text-editor {
-  height: 350px;
+  height: calc(100vh - 380px);
+  min-height: 300px;
   position: relative;
 }
 
