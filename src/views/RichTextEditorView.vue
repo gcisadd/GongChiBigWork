@@ -83,6 +83,9 @@
                   {{ summary }}
                 </div>
               </div>
+
+              <!-- 评论区域 -->
+              <CommentSection v-if="documentId" :document-id="Number(documentId)" />
             </div>
 
             <!-- 右侧预览区域 -->
@@ -119,6 +122,7 @@ import { useRoute, useRouter } from 'vue-router'
 import FriendSelect from '../components/FriendSelect.vue'
 import { documentApi } from '../services/api'
 import AppSidebar from '../components/AppSidebar.vue'
+import CommentSection from '../components/CommentSection.vue'
 
 /**
  * Markdown 编辑器页面组件

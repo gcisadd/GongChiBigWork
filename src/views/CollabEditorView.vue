@@ -157,6 +157,9 @@
                   {{ summary }}
                 </div>
               </div>
+
+              <!-- 评论区域 -->
+              <CommentSection v-if="documentId" :document-id="documentId" />
             </div>
 
           </div>
@@ -185,6 +188,7 @@ import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import { documentApi } from "../services/api";
 import collaborationService from "../services/collaboration";
 import AppSidebar from "../components/AppSidebar.vue";
+import CommentSection from "../components/CommentSection.vue";
 
 /**
  * 协作编辑页面组件

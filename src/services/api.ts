@@ -484,6 +484,85 @@ export const permissionApi = {
 }
 
 /**
+ * 评论管理相关 API
+ */
+export const commentApi = {
+  /**
+   * 获取文档的评论列表
+   *
+   * @param {number} documentId - 文档ID
+   * @returns {Promise} 评论列表（树形结构）
+   */
+  getComments: async (documentId: number) => {
+    const response = await api.get(`/api/documents/${documentId}/comments`)
+    return response.data
+  },
+
+  /**
+   * 创建评论
+   *
+   * @param {number} documentId - 文档ID
+   * @param {Object} commentData - 评论数据
+   * @param {string} commentData.content - 评论内容
+   * @returns {Promise} 创建的评论
+   */
+  createComment: async (documentId: number, commentData: { content: string }) => {
+    const response = await api.post(`/api/documents/${documentId}/comments`, commentData)
+    return response.data
+  },
+
+  /**
+   * 回复评论
+   *
+   * @param {number} documentId - 文档ID
+   * @param {Object} replyData - 回复数据
+   * @param {string} replyData.content - 回复内容
+   * @param {number} replyData.parent_id - 父评论ID
+   * @returns {Promise} 创建的回复
+   */
+  replyComment: async (
+    documentId: number,
+    replyData: { content: string; parent_id: number }
+  ) => {
+    const response = await api.post(`/api/documents/${documentId}/comments/reply`, replyData)
+    return response.data
+  },
+
+  /**
+   * 删除评论
+   *
+   * @param {number} documentId - 文档ID
+   * @param {number} commentId - 评论ID
+   * @returns {Promise} 操作结果
+   */
+  deleteComment: async (documentId: number, commentId: number) => {
+    const response = await api.delete(`/api/documents/${documentId}/comments/${commentId}`)
+    return response.data
+  },
+
+  /**
+   * 编辑评论
+   *
+   * @param {number} documentId - 文档ID
+   * @param {number} commentId - 评论ID
+   * @param {Object} commentData - 评论数据
+   * @param {string} commentData.content - 评论内容
+   * @returns {Promise} 更新后的评论
+   */
+  updateComment: async (
+    documentId: number,
+    commentId: number,
+    commentData: { content: string }
+  ) => {
+    const response = await api.put(
+      `/api/documents/${documentId}/comments/${commentId}`,
+      commentData
+    )
+    return response.data
+  },
+}
+
+/**
  * 健康检查
  *
  * @returns {Promise} 健康状态

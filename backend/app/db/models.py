@@ -138,3 +138,27 @@ class DocumentPermission(Base):
     # 复合唯一索引：每个文档对每个用户只能有一条权限记录
     __table_args__ = (
     )
+
+
+class Comment(Base):
+    """
+    评论表模型
+
+    存储文档的评论和回复，支持嵌套回复
+    """
+    __tablename__ = "comments"
+
+    id = Column(Integer, primary_key=True, index=True, comment="评论ID")
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True, comment="文档ID")
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True, comment="评论用户ID")
+    username = Column(String(50), nullable=False, comment="评论用户名")
+    content = Column(Text, nullable=False, comment="评论内容")
+    parent_id = Column(Integer, ForeignKey("comments.id", ondelete="CASCADE"), nullable=True, index=True, comment="父评论ID，用于回复")
+    created_at = Column(DateTime, default=datetime.utcnow, comment="创建时间")
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, comment="更新时间")
+
+    # 关系
+    document = relationship("Document")
+    user = relationship("User")
+    parent = relationship("Comment", remote_side=[id], back_populates="replies")
+    replies = relationship("Comment", back_populates="parent", cascade="all, delete-orphan")
