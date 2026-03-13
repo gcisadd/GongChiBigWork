@@ -1,7 +1,7 @@
 <template>
   <div class="comment-item" :class="{ 'is-reply': isReply }">
     <div class="comment-main">
-      <el-avatar :size="isReply ? 28 : 36" class="comment-avatar">
+      <el-avatar :size="isReply ? 28 : 36" :src="avatarSrc" class="comment-avatar">
         {{ comment.username.charAt(0).toUpperCase() }}
       </el-avatar>
 
@@ -93,6 +93,7 @@ interface CommentData {
   document_id: number
   user_id: number
   username: string
+  avatar?: string
   content: string
   parent_id: number | null
   created_at: string
@@ -141,6 +142,17 @@ const canDelete = computed(() => {
 // 该条评论的发布者是否为文档作者
 const isOwner = computed(() => {
   return props.comment.user_id === props.documentOwnerId
+})
+
+// 格式化头像URL
+const avatarSrc = computed(() => {
+  if (props.comment.avatar) {
+    if (props.comment.avatar.startsWith('data:')) {
+      return props.comment.avatar
+    }
+    return `data:image/jpeg;base64,${props.comment.avatar}`
+  }
+  return ''
 })
 
 // 格式化时间

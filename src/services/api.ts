@@ -285,8 +285,41 @@ export const profileApi = {
    * @param {string} [profileData.bio] - 个人简介
    * @returns {Promise} 更新后的用户信息
    */
-  updateProfile: async (profileData: { phone?: string; bio?: string }) => {
+  updateProfile: async (profileData: { phone?: string; bio?: string; avatar?: string }) => {
     const response = await api.put('/api/profile', profileData)
+    return response.data
+  },
+
+  /**
+   * 获取指定用户的头像
+   *
+   * @param {number} userId - 用户ID
+   * @returns {Promise} 头像数据（Base64）
+   */
+  getUserAvatar: async (userId: number) => {
+    const response = await api.get(`/api/profile/${userId}/avatar`)
+    return response.data
+  },
+
+  /**
+   * 根据用户名获取用户头像（用于协作编辑等展示）
+   *
+   * @param {string} username - 用户名
+   * @returns {Promise} 头像数据（Base64）
+   */
+  getAvatarByUsername: async (username: string) => {
+    const response = await api.get(`/api/profile/by-username/${encodeURIComponent(username)}/avatar`)
+    return response.data
+  },
+
+  /**
+   * 上传/更新当前用户头像
+   *
+   * @param {string} avatar - 头像Base64数据
+   * @returns {Promise} 操作结果
+   */
+  uploadAvatar: async (avatar: string) => {
+    const response = await api.post('/api/profile/avatar', { avatar })
     return response.data
   },
 }

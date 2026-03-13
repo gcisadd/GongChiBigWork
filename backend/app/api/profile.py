@@ -18,13 +18,21 @@ router = APIRouter()
 class ProfileUpdate(BaseModel):
     """
     更新个人信息请求模型
-    
+
     所有字段都是可选的，支持部分更新
     """
     username: str = None
     email: EmailStr = None
     phone: str = None
     bio: str = None
+    avatar: str = None
+
+
+class AvatarUpdate(BaseModel):
+    """
+    更新头像请求模型
+    """
+    avatar: str  # Base64编码的头像数据
 
 
 class ProfileResponse(BaseModel):
@@ -36,6 +44,7 @@ class ProfileResponse(BaseModel):
     email: str
     phone: str
     bio: str
+    avatar: str = None
 
     class Config:
         from_attributes = True
@@ -47,7 +56,7 @@ async def get_profile(
 ):
     """
     获取当前用户个人信息
-    
+
     @input current_user - 当前登录用户（从 token 中解析）
     @output 返回当前用户的个人信息
     """
@@ -57,7 +66,71 @@ async def get_profile(
         "email": current_user.email,
         "phone": current_user.phone or "",
         "bio": current_user.bio or "",
+        "avatar": current_user.avatar or "",
     }
+
+
+@router.get("/by-username/{username}/avatar")
+async def get_user_avatar_by_username(
+    username: str,
+    db: Session = Depends(get_db)
+):
+    """
+    根据用户名获取用户头像（用于协作编辑等场景展示）
+
+    @input username - 用户名
+    @input db - 数据库会话
+    @output 返回头像数据（Base64或空）
+    """
+    user = db.query(User).filter(User.username == username).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="用户不存在"
+        )
+    return {"avatar": user.avatar or ""}
+
+
+@router.get("/{user_id}/avatar")
+async def get_user_avatar(
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    获取指定用户的头像
+
+    @input user_id - 用户ID
+    @input db - 数据库会话
+    @output 返回头像数据（Base64或空）
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="用户不存在"
+        )
+    return {"avatar": user.avatar or ""}
+
+
+@router.post("/avatar", response_model=dict)
+async def upload_avatar(
+    avatar_data: AvatarUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    上传/更新当前用户头像
+
+    @input avatar_data - 头像数据（Base64编码）
+    @input db - 数据库会话
+    @input current_user - 当前登录用户
+    @output 返回操作结果
+    """
+    current_user.avatar = avatar_data.avatar
+    db.commit()
+    db.refresh(current_user)
+
+    return {"message": "头像更新成功", "avatar": current_user.avatar}
 
 
 @router.put("", response_model=ProfileResponse)
@@ -102,14 +175,17 @@ async def update_profile(
         current_user.phone = profile_data.phone
     if profile_data.bio is not None:
         current_user.bio = profile_data.bio
-    
+    if profile_data.avatar is not None:
+        current_user.avatar = profile_data.avatar
+
     db.commit()
     db.refresh(current_user)
-    
+
     return {
         "id": current_user.id,
         "username": current_user.username,
         "email": current_user.email,
         "phone": current_user.phone or "",
         "bio": current_user.bio or "",
+        "avatar": current_user.avatar or "",
     }

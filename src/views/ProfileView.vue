@@ -16,6 +16,17 @@
             </div>
           </template>
 
+          <!-- 头像上传区域 -->
+          <div class="avatar-section">
+            <AvatarUpload
+              v-model="profileForm.avatar"
+              :size="100"
+              :username="profileForm.username"
+              :show-overlay="true"
+            />
+            <div class="avatar-tip">点击头像更换（支持 jpg、png 等格式，最大 2MB）</div>
+          </div>
+
           <!-- 个人信息表单 -->
           <el-form
             ref="profileFormRef"
@@ -97,7 +108,8 @@ import { Document, Message, Phone, SwitchButton, User } from '@element-plus/icon
 import { type FormInstance, type FormRules, ElMessage, ElMessageBox } from 'element-plus'
 import { onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { authApi, profileApi } from '../services/api'
+import { profileApi } from '../services/api'
+import AvatarUpload from '../components/AvatarUpload.vue'
 import AppSidebar from '../components/AppSidebar.vue'
 
 /**
@@ -123,6 +135,7 @@ interface ProfileForm {
   email: string
   phone: string
   bio: string
+  avatar: string
 }
 
 /**
@@ -134,6 +147,7 @@ interface ProfileForm {
  * @property {string} email - 邮箱
  * @property {string} [phone] - 手机号
  * @property {string} [bio] - 个人简介
+ * @property {string} [avatar] - 头像（Base64）
  */
 interface UserInfo {
   id: number
@@ -141,6 +155,7 @@ interface UserInfo {
   email: string
   phone?: string
   bio?: string
+  avatar?: string
 }
 
 /**
@@ -175,6 +190,7 @@ const profileForm = reactive<ProfileForm>({
   email: '',
   phone: '',
   bio: '',
+  avatar: '',
 })
 
 /**
@@ -215,14 +231,15 @@ const profileRules: FormRules<ProfileForm> = {
  */
 const initProfileData = async () => {
   try {
-    // 调用后端 API 获取用户信息
-    const userInfo: UserInfo = await authApi.getCurrentUser()
+    // 使用 profile 接口获取完整信息（含头像、简介）
+    const userInfo: UserInfo = await profileApi.getProfile()
 
     // 填充表单数据
     profileForm.username = userInfo.username || ''
     profileForm.email = userInfo.email || ''
     profileForm.phone = userInfo.phone || ''
     profileForm.bio = userInfo.bio || ''
+    profileForm.avatar = userInfo.avatar || ''
   } catch (error) {
     console.error('获取用户信息失败:', error)
     // 如果获取失败，使用本地存储的用户名
@@ -327,6 +344,22 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* 头像区域 */
+.avatar-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 0;
+  border-bottom: 1px solid #ebeef5;
+  margin-bottom: 20px;
+}
+
+.avatar-tip {
+  margin-top: 10px;
+  color: #909399;
+  font-size: 12px;
+}
+
 /* 页面根容器：全屏布局，背景与其他页面保持一致 */
 .profile-container {
   width: 100vw;

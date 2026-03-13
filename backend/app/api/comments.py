@@ -45,6 +45,7 @@ class CommentResponse(BaseModel):
     document_id: int
     user_id: int
     username: str
+    avatar: Optional[str] = None  # 用户头像（Base64）
     content: str
     parent_id: Optional[int] = None
     created_at: datetime
@@ -91,11 +92,12 @@ def check_comment_permission(db: Session, document_id: int, user_id: int) -> boo
     return access_level in ["owner", "edit", "view"]
 
 
-def get_comment_tree(comments: List[Comment], parent_id: Optional[int] = None) -> List[CommentResponse]:
+def get_comment_tree(comments: List[Comment], user_avatars: dict, parent_id: Optional[int] = None) -> List[CommentResponse]:
     """
     将评论列表转换为树形结构
 
     @input comments - 所有评论列表
+    @input user_avatars - 用户头像字典 {user_id: avatar}
     @input parent_id - 父评论ID
     @output 返回树形结构的评论列表
     """
@@ -103,12 +105,13 @@ def get_comment_tree(comments: List[Comment], parent_id: Optional[int] = None) -
     for comment in comments:
         if comment.parent_id == parent_id:
             # 递归获取子评论
-            replies = get_comment_tree(comments, comment.id)
+            replies = get_comment_tree(comments, user_avatars, comment.id)
             result.append(CommentResponse(
                 id=comment.id,
                 document_id=comment.document_id,
                 user_id=comment.user_id,
                 username=comment.username,
+                avatar=user_avatars.get(comment.user_id, ""),
                 content=comment.content,
                 parent_id=comment.parent_id,
                 created_at=comment.created_at,
@@ -155,8 +158,13 @@ async def get_document_comments(
         Comment.document_id == document_id
     ).order_by(Comment.created_at.asc()).all()
 
+    # 获取所有评论用户的头像
+    user_ids = list(set([c.user_id for c in comments]))
+    users = db.query(User).filter(User.id.in_(user_ids)).all() if user_ids else []
+    user_avatars = {u.id: u.avatar or "" for u in users}
+
     # 转换为树形结构
-    comment_tree = get_comment_tree(comments, None)
+    comment_tree = get_comment_tree(comments, user_avatars, None)
 
     return {
         "total": len(comments),
@@ -219,6 +227,7 @@ async def create_comment(
         document_id=new_comment.document_id,
         user_id=new_comment.user_id,
         username=new_comment.username,
+        avatar=current_user.avatar or "",
         content=new_comment.content,
         parent_id=new_comment.parent_id,
         created_at=new_comment.created_at,
@@ -293,6 +302,7 @@ async def reply_to_comment(
         document_id=new_reply.document_id,
         user_id=new_reply.user_id,
         username=new_reply.username,
+        avatar=current_user.avatar or "",
         content=new_reply.content,
         parent_id=new_reply.parent_id,
         created_at=new_reply.created_at,

@@ -6,14 +6,44 @@ FastAPI 主应用入口文件
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from app.api import auth, documents, profile, websocket, friends, document_permissions, comments
 from app.core.config import settings
 from app.db.database import engine
 from app.db.models import Base
 
+
+def _ensure_avatar_column():
+    """若 users 表缺少 avatar 列则添加（兼容旧数据库，支持 SQLite 与 MySQL）"""
+    with engine.connect() as conn:
+        try:
+            if "sqlite" in settings.DATABASE_URL:
+                result = conn.execute(text("PRAGMA table_info(users)"))
+                columns = [row[1] for row in result]
+                if "avatar" not in columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN avatar TEXT"))
+                    conn.commit()
+            elif "mysql" in settings.DATABASE_URL:
+                # MySQL: 检查 information_schema
+                db_name = settings.DATABASE_URL.split("/")[-1].split("?")[0]
+                result = conn.execute(
+                    text(
+                        "SELECT COLUMN_NAME FROM information_schema.COLUMNS "
+                        "WHERE TABLE_SCHEMA = :db AND TABLE_NAME = 'users' AND COLUMN_NAME = 'avatar'"
+                    ),
+                    {"db": db_name},
+                )
+                if result.fetchone() is None:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN avatar TEXT NULL"))
+                    conn.commit()
+        except Exception as e:
+            print(f"[启动] 检查/添加 avatar 列时出错（可忽略）: {e}")
+
+
 # 创建数据库表（如果不存在）
 Base.metadata.create_all(bind=engine)
+_ensure_avatar_column()
 
 # 创建 FastAPI 应用实例
 app = FastAPI(

@@ -45,6 +45,7 @@ class User(Base):
     email = Column(String(100), unique=True, index=True, nullable=False, comment="邮箱")
     phone = Column(String(20), nullable=True, comment="手机号")
     bio = Column(Text, nullable=True, comment="个人简介")
+    avatar = Column(Text, nullable=True, comment="头像（Base64编码）")
     hashed_password = Column(String(255), nullable=False, comment="加密后的密码")
     created_at = Column(DateTime, default=datetime.utcnow, comment="创建时间")
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, comment="更新时间")

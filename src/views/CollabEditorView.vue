@@ -27,7 +27,11 @@
                     :content="user"
                     placement="top"
                   >
-                    <el-avatar :size="32" :style="{ backgroundColor: getUserColor(user) }">
+                    <el-avatar
+                      :size="32"
+                      :src="getUserAvatarSrc(user)"
+                      :style="{ backgroundColor: getUserColor(user) }"
+                    >
                       {{ user.charAt(0).toUpperCase() }}
                     </el-avatar>
                   </el-tooltip>
@@ -185,7 +189,7 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import html2pdf from "html2pdf.js";
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
-import { documentApi } from "../services/api";
+import { documentApi, profileApi } from "../services/api";
 import collaborationService from "../services/collaboration";
 import AppSidebar from "../components/AppSidebar.vue";
 import CommentSection from "../components/CommentSection.vue";
@@ -375,6 +379,17 @@ const isConnected = computed(() => collaborationService.isConnected.value);
 // 显示的用户列表（排除自己）
 const displayUsers = computed(() => onlineUsers.value.filter((u) => u !== currentUsername.value));
 
+// 在线用户头像缓存 username -> base64
+const userAvatars = ref<Record<string, string>>({});
+
+// 获取用户头像用于显示（返回 data URL 或空）
+const getUserAvatarSrc = (username: string): string => {
+  const raw = userAvatars.value[username];
+  if (!raw) return "";
+  if (raw.startsWith("data:")) return raw;
+  return `data:image/jpeg;base64,${raw}`;
+};
+
 // 当前用户名
 const currentUsername = ref("");
 
@@ -391,6 +406,23 @@ watch(title, (newVal, oldVal) => {
     hasUnsavedChanges.value = true;
   }
 });
+
+// 拉取在线用户头像
+const fetchUserAvatars = async () => {
+  for (const username of displayUsers.value) {
+    if (userAvatars.value[username]) continue;
+    try {
+      const res = await profileApi.getAvatarByUsername(username);
+      if (res.avatar) {
+        userAvatars.value[username] = res.avatar;
+        userAvatars.value = { ...userAvatars.value };
+      }
+    } catch {
+      // 忽略单用户拉取失败
+    }
+  }
+};
+watch(displayUsers, fetchUserAvatars, { immediate: true });
 
 /**
  * 获取用户颜色
