@@ -4,28 +4,7 @@
     <el-container class="layout-container">
       <!-- 左侧导航栏区域 -->
       <el-aside width="200px" class="aside-container">
-        <el-menu :default-active="activeMenu" class="aside-menu" router @select="handleMenuSelect">
-          <!-- 导航菜单项 -->
-          <el-menu-item index="/table">
-            <el-icon><Document /></el-icon>
-            <span>文档列表</span>
-          </el-menu-item>
-          <!-- 好友管理菜单项 -->
-          <el-menu-item index="/friends">
-            <el-icon><User /></el-icon>
-            <span>好友管理</span>
-          </el-menu-item>
-          <!-- 富文本编辑器菜单项 -->
-          <el-menu-item index="/editor">
-            <el-icon><Edit /></el-icon>
-            <span>新建文档</span>
-          </el-menu-item>
-          <!-- 个人信息菜单项 -->
-          <el-menu-item index="/profile">
-            <el-icon><User /></el-icon>
-            <span>关于</span>
-          </el-menu-item>
-        </el-menu>
+        <AppSidebar />
       </el-aside>
 
       <!-- 右侧主内容区域 -->
@@ -81,23 +60,13 @@
             <el-table-column label="操作" min-width="280" fixed="right">
               <template #default="scope">
                 <el-button
-                  v-if="scope.row.is_owner"
-                  type="success"
-                  size="large"
-                  :icon="Key"
-                  class="action-button"
-                  @click="handleManagePermissions(scope.row)"
-                >
-                  权限管理
-                </el-button>
-                <el-button
                   type="primary"
                   size="large"
                   :icon="Connection"
                   class="action-button"
                   @click="handleCollabEdit(scope.row)"
                 >
-                  协作编辑
+                  协作
                 </el-button>
                 <el-button
                   type="danger"
@@ -107,6 +76,16 @@
                   @click="handleDeleteRow(scope.row)"
                 >
                   删除
+                </el-button>
+                <el-button
+                  v-if="scope.row.is_owner"
+                  type="success"
+                  size="large"
+                  :icon="Key"
+                  class="action-button"
+                  @click="handleManagePermissions(scope.row)"
+                >
+                  管理
                 </el-button>
               </template>
             </el-table-column>
@@ -203,19 +182,11 @@
 </template>
 
 <script setup lang="ts">
-import {
-  Connection,
-  Delete,
-  Document,
-  Edit,
-  Key,
-  Plus,
-  Refresh,
-  User,
-} from "@element-plus/icons-vue";
+import { Connection, Delete, Key, Plus, Refresh } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import AppSidebar from "../components/AppSidebar.vue";
 import { documentApi, friendApi, permissionApi } from "../services/api";
 /**
  * 文档列表页面组件
@@ -249,9 +220,6 @@ interface DocumentRow {
 // 路由实例，用于获取当前路由路径和执行页面跳转
 const route = useRoute();
 const router = useRouter();
-
-// 当前激活的菜单项
-const activeMenu = ref("/table");
 
 // 文档列表数据
 const tableData = ref<DocumentRow[]>([]);
@@ -620,28 +588,13 @@ const handleCurrentChange = (page: number) => {
 };
 
 /**
- * 处理菜单选择
- *
- * @input 用户点击导航菜单项
- * @process 1. 更新当前激活的菜单项
- *          2. 菜单路由跳转由 el-menu 的 router 属性自动处理
- * @output 更新激活菜单状态
- */
-const handleMenuSelect = (index: string) => {
-  activeMenu.value = index;
-};
-
-/**
  * 组件挂载时初始化数据
  *
  * @input 组件挂载完成
- * @process 1. 设置当前激活的菜单项为当前路由路径
- *          2. 调用初始化表格数据函数
- * @output 填充表格数据，设置菜单激活状态
+ * @process 调用初始化表格数据函数
+ * @output 填充表格数据
  */
 onMounted(() => {
-  // 根据当前路由设置激活的菜单项
-  activeMenu.value = route.path;
   initTableData();
 });
 </script>

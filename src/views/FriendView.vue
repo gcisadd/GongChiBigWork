@@ -4,28 +4,7 @@
     <el-container class="layout-container">
       <!-- 左侧导航栏区域 -->
       <el-aside width="200px" class="aside-container">
-        <el-menu
-          :default-active="activeMenu"
-          class="aside-menu"
-          router
-          @select="handleMenuSelect"
-        >
-          <!-- 文档列表菜单项 -->
-          <el-menu-item index="/table">
-            <el-icon><Document /></el-icon>
-            <span>文档列表</span>
-          </el-menu-item>
-          <!-- 好友管理菜单项 -->
-          <el-menu-item index="/friends">
-            <el-icon><User /></el-icon>
-            <span>好友管理</span>
-          </el-menu-item>
-          <!-- 个人信息菜单项 -->
-          <el-menu-item index="/profile">
-            <el-icon><UserFilled /></el-icon>
-            <span>个人信息</span>
-          </el-menu-item>
-        </el-menu>
+        <AppSidebar />
       </el-aside>
 
       <!-- 右侧主内容区域 -->
@@ -200,6 +179,7 @@ import { type FormInstance, type FormRules, ElMessage, ElMessageBox } from 'elem
 import { onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { friendApi } from '../services/api'
+import AppSidebar from '../components/AppSidebar.vue'
 
 /**
  * 好友管理页面组件
@@ -259,11 +239,6 @@ const route = useRoute()
 const addFriendFormRef = ref<FormInstance>()
 
 /**
- * 当前激活的菜单路径
- */
-const activeMenu = ref<string>('/friends')
-
-/**
  * 当前激活的标签页
  */
 const activeTab = ref('friends')
@@ -312,14 +287,6 @@ const addFriendRules: FormRules = {
   username: [
     { required: true, message: '请输入用户名', trigger: 'blur' },
   ],
-}
-
-/**
- * 处理菜单选择
- */
-const handleMenuSelect = (index: string) => {
-  activeMenu.value = index
-  router.push(index)
 }
 
 /**
@@ -482,7 +449,6 @@ const formatDate = (dateString: string) => {
  * 组件挂载时加载数据
  */
 onMounted(() => {
-  activeMenu.value = route.path || '/friends'
   loadFriends()
   loadReceivedRequests()
   loadSentRequests()

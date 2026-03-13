@@ -13,16 +13,9 @@
       </el-tag>
       <span v-if="selectedFriends.length === 0" class="no-friends">未选择好友</span>
     </div>
+    <el-button type="primary" @click="showDialog = true" class="select-btn"> 选择好友 </el-button>
 
-    <el-button type="primary" size="small" @click="showDialog = true">
-      选择好友
-    </el-button>
-
-    <el-dialog
-      v-model="showDialog"
-      title="选择好友"
-      width="500px"
-    >
+    <el-dialog v-model="showDialog" title="选择好友" width="500px">
       <div class="dialog-content">
         <el-input
           v-model="searchKeyword"
@@ -68,96 +61,98 @@
 </template>
 
 <script setup lang="ts">
-import { Search } from '@element-plus/icons-vue'
-import { ref, computed, onMounted } from 'vue'
-import { friendApi } from '../services/api'
+import { Search } from "@element-plus/icons-vue";
+import { computed, onMounted, ref } from "vue";
+import { friendApi } from "../services/api";
 
 interface Friend {
-  id: number
-  friend_id: number
-  friend_username: string
-  friend_email: string
-  created_at: string
+  id: number;
+  friend_id: number;
+  friend_username: string;
+  friend_email: string;
+  created_at: string;
 }
 
 interface SelectedFriend extends Friend {
-  permission_level: string
+  permission_level: string;
 }
 
 const props = defineProps<{
-  modelValue: SelectedFriend[]
-}>()
+  modelValue: SelectedFriend[];
+}>();
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', value: SelectedFriend[]): void
-}>()
+  (e: "update:modelValue", value: SelectedFriend[]): void;
+}>();
 
-const showDialog = ref(false)
-const searchKeyword = ref('')
-const friends = ref<Friend[]>([])
-const checkedFriends = ref<number[]>([])
-const defaultPermission = ref('view')
+const showDialog = ref(false);
+const searchKeyword = ref("");
+const friends = ref<Friend[]>([]);
+const checkedFriends = ref<number[]>([]);
+const defaultPermission = ref("view");
 
-let searchTimer: ReturnType<typeof setTimeout> | null = null
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
 const filteredFriends = computed(() => {
   if (!searchKeyword.value.trim()) {
-    return friends.value
+    return friends.value;
   }
-  const keyword = searchKeyword.value.toLowerCase()
+  const keyword = searchKeyword.value.toLowerCase();
   return friends.value.filter(
-    f => f.friend_username.toLowerCase().includes(keyword) ||
-         f.friend_email.toLowerCase().includes(keyword)
-  )
-})
+    (f) =>
+      f.friend_username.toLowerCase().includes(keyword) ||
+      f.friend_email.toLowerCase().includes(keyword),
+  );
+});
 
-const selectedFriends = computed(() => props.modelValue)
+const selectedFriends = computed(() => props.modelValue);
 
 const loadFriends = async () => {
   try {
-    const res = await friendApi.getFriends()
-    friends.value = res.items || []
+    const res = await friendApi.getFriends();
+    friends.value = res.items || [];
   } catch (error) {
-    console.error('获取好友列表失败:', error)
+    console.error("获取好友列表失败:", error);
   }
-}
+};
 
 const handleSearch = () => {
   if (searchTimer) {
-    clearTimeout(searchTimer)
+    clearTimeout(searchTimer);
   }
   // 搜索功能可以扩展
-}
+};
 
 const handleRemoveFriend = (friend: SelectedFriend) => {
-  const newList = selectedFriends.value.filter(f => f.friend_id !== friend.friend_id)
-  emit('update:modelValue', newList)
-}
+  const newList = selectedFriends.value.filter((f) => f.friend_id !== friend.friend_id);
+  emit("update:modelValue", newList);
+};
 
 const handleConfirm = () => {
   const selected: SelectedFriend[] = friends.value
-    .filter(f => checkedFriends.value.includes(f.friend_id))
-    .map(f => ({
+    .filter((f) => checkedFriends.value.includes(f.friend_id))
+    .map((f) => ({
       ...f,
-      permission_level: defaultPermission.value
-    }))
-  
-  emit('update:modelValue', selected)
-  showDialog.value = false
-  checkedFriends.value = []
-  searchKeyword.value = ''
-}
+      permission_level: defaultPermission.value,
+    }));
+
+  emit("update:modelValue", selected);
+  showDialog.value = false;
+  checkedFriends.value = [];
+  searchKeyword.value = "";
+};
 
 onMounted(() => {
-  loadFriends()
-})
+  loadFriends();
+});
 </script>
 
 <style scoped>
 .friend-select {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
 }
 
 .selected-friends {
@@ -165,6 +160,12 @@ onMounted(() => {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.select-btn {
+  flex-shrink: 0;
 }
 
 .label {

@@ -4,20 +4,7 @@
     <el-container class="layout-container">
       <!-- 左侧导航栏区域 -->
       <el-aside width="200px" class="aside-container">
-        <el-menu :default-active="activeMenu" class="aside-menu" router @select="handleMenuSelect">
-          <el-menu-item index="/table">
-            <el-icon><Document /></el-icon>
-            <span>文档列表</span>
-          </el-menu-item>
-          <el-menu-item index="/collab-editor">
-            <el-icon><Connection /></el-icon>
-            <span>协作编辑</span>
-          </el-menu-item>
-          <el-menu-item index="/profile">
-            <el-icon><User /></el-icon>
-            <span>关于</span>
-          </el-menu-item>
-        </el-menu>
+        <AppSidebar />
       </el-aside>
 
       <!-- 右侧主内容区域 -->
@@ -197,6 +184,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import { documentApi } from "../services/api";
 import collaborationService from "../services/collaboration";
+import AppSidebar from "../components/AppSidebar.vue";
 
 /**
  * 协作编辑页面组件
@@ -219,9 +207,6 @@ interface CollaboratorInfo {
 // 路由实例
 const route = useRoute();
 const router = useRouter();
-
-// 当前激活的菜单路径
-const activeMenu = ref("/collab-editor");
 
 // 编辑器引用
 const editorRef = ref();
@@ -711,14 +696,6 @@ const onSelectionChange = () => {
 };
 
 /**
- * 处理菜单选择
- */
-const handleMenuSelect = (index: string) => {
-  activeMenu.value = index;
-  router.push(index);
-};
-
-/**
  * 保存文档
  */
 const handleSave = async (): Promise<boolean> => {
@@ -1134,8 +1111,6 @@ const setupCollaborationCallbacks = () => {
  * 组件挂载
  */
 onMounted(async () => {
-  activeMenu.value = route.path || "/collab-editor";
-
   // 加载文档
   await loadDocument();
 

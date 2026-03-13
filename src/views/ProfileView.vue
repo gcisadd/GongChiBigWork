@@ -4,23 +4,7 @@
     <el-container class="layout-container">
       <!-- 左侧导航栏区域 -->
       <el-aside width="200px" class="aside-container">
-        <el-menu
-          :default-active="activeMenu"
-          class="aside-menu"
-          router
-          @select="handleMenuSelect"
-        >
-          <!-- 文档列表菜单项 -->
-          <el-menu-item index="/table">
-            <el-icon><Document /></el-icon>
-            <span>文档列表</span>
-          </el-menu-item>
-          <!-- 个人信息菜单项 -->
-          <el-menu-item index="/profile">
-            <el-icon><User /></el-icon>
-            <span>关于</span>
-          </el-menu-item>
-        </el-menu>
+        <AppSidebar />
       </el-aside>
 
       <!-- 右侧主内容区域 -->
@@ -114,6 +98,7 @@ import { type FormInstance, type FormRules, ElMessage, ElMessageBox } from 'elem
 import { onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { authApi, profileApi } from '../services/api'
+import AppSidebar from '../components/AppSidebar.vue'
 
 /**
  * 个人信息页面组件
@@ -177,15 +162,6 @@ const profileFormRef = ref<FormInstance>()
  * 保存按钮加载状态
  */
 const saving = ref(false)
-
-/**
- * 当前激活的菜单路径
- *
- * @input 由当前路由变化触发
- * @process 当页面加载或路由变化时更新为当前路径
- * @output 控制左侧导航菜单的高亮状态
- */
-const activeMenu = ref<string>('/profile')
 
 /**
  * 个人信息表单数据
@@ -256,19 +232,6 @@ const initProfileData = async () => {
     profileForm.phone = '13800138000'
     profileForm.bio = '这是一个示例的个人简介，您可以在这里编辑您自己的简介内容。'
   }
-}
-
-/**
- * 处理菜单选择
- *
- * @input 用户点击左侧导航菜单项
- * @process 1. 更新当前激活菜单路径
- *          2. 使用 router.push 进行路由跳转
- * @output 导航到对应页面，并更新菜单高亮状态
- */
-const handleMenuSelect = (index: string) => {
-  activeMenu.value = index
-  router.push(index)
 }
 
 /**
@@ -355,13 +318,10 @@ const handleLogout = async () => {
  * 组件挂载时初始化数据
  *
  * @input 组件首次挂载
- * @process 1. 设置当前激活的菜单项为当前路由路径
- *          2. 调用初始化个人信息数据函数
- * @output 填充个人信息表单数据，设置菜单激活状态
+ * @process 调用初始化个人信息数据函数
+ * @output 填充个人信息表单数据
  */
 onMounted(() => {
-  // 根据当前路由设置激活的菜单项
-  activeMenu.value = route.path || '/profile'
   initProfileData()
 })
 </script>

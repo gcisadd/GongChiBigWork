@@ -4,33 +4,7 @@
     <el-container class="layout-container">
       <!-- 左侧导航栏区域 -->
       <el-aside width="200px" class="aside-container">
-        <el-menu
-          :default-active="activeMenu"
-          class="aside-menu"
-          router
-          @select="handleMenuSelect"
-        >
-          <!-- 文档列表菜单项 -->
-          <el-menu-item index="/table">
-            <el-icon><Document /></el-icon>
-            <span>文档列表</span>
-          </el-menu-item>
-          <!-- 好友管理菜单项 -->
-          <el-menu-item index="/friends">
-            <el-icon><User /></el-icon>
-            <span>好友管理</span>
-          </el-menu-item>
-          <!-- Markdown 编辑器菜单项 -->
-          <el-menu-item index="/editor">
-            <el-icon><Edit /></el-icon>
-            <span>编辑文档</span>
-          </el-menu-item>
-          <!-- 个人信息菜单项 -->
-          <el-menu-item index="/profile">
-            <el-icon><User /></el-icon>
-            <span>关于</span>
-          </el-menu-item>
-        </el-menu>
+        <AppSidebar />
       </el-aside>
 
       <!-- 右侧主内容区域 -->
@@ -144,6 +118,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import FriendSelect from '../components/FriendSelect.vue'
 import { documentApi } from '../services/api'
+import AppSidebar from '../components/AppSidebar.vue'
 
 /**
  * Markdown 编辑器页面组件
@@ -163,15 +138,6 @@ const router = useRouter()
  * 当前路由信息，用于确定左侧菜单高亮项
  */
 const route = useRoute()
-
-/**
- * 当前激活的菜单路径
- *
- * @input 由当前路由变化触发
- * @process 当页面加载或路由变化时更新为当前路径
- * @output 控制左侧导航菜单的高亮状态
- */
-const activeMenu = ref<string>('/editor')
 
 /**
  * 文档标题
@@ -272,19 +238,6 @@ const loadDocument = async () => {
     // 没有 ID，表示新建文档
     documentId.value = null
   }
-}
-
-/**
- * 处理菜单选择
- *
- * @input 用户点击左侧导航菜单项
- * @process 1. 更新当前激活菜单路径
- *          2. 使用 router.push 进行路由跳转
- * @output 导航到对应页面，并更新菜单高亮状态
- */
-const handleMenuSelect = (index: string) => {
-  activeMenu.value = index
-  router.push(index)
 }
 
 /**
@@ -552,15 +505,13 @@ const copySummary = async () => {
 }
 
 /**
- * 组件挂载时初始化菜单高亮状态
+ * 组件挂载时初始化数据
  *
  * @input 组件首次挂载
- * @process 将 activeMenu 设置为当前路由路径，确保刷新页面后菜单高亮正确，然后加载文档内容
- * @output 左侧导航栏显示正确的激活项，并加载文档内容（如果有 ID）
+ * @process 加载文档内容
+ * @output 加载文档内容（如果有 ID）
  */
 onMounted(async () => {
-  activeMenu.value = route.path || '/editor'
-  // 加载文档内容
   await loadDocument()
 })
 </script>
