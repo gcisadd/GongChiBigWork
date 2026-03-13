@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.api.auth import get_current_user
 from app.api.websocket import manager
 from app.db.database import get_db
-from app.db.models import Document, User
+from app.db.models import Document, User, DocumentPermission, PermissionLevel
 
 router = APIRouter()
 
@@ -27,6 +27,7 @@ class DocumentCreate(BaseModel):
     """
     title: str
     content: Optional[str] = ""
+    permissions: Optional[List[dict]] = None  # 权限列表 [{"user_id": 1, "permission_level": "view"}]
 
 
 class DocumentUpdate(BaseModel):
@@ -49,6 +50,8 @@ class DocumentResponse(BaseModel):
     creator_name: str
     created_at: datetime
     modified_time: datetime
+    user_permission: Optional[str] = "owner"  # 当前用户对此文档的权限级别
+    is_owner: Optional[bool] = True  # 当前用户是否是创建者
 
     class Config:
         from_attributes = True
@@ -76,6 +79,31 @@ class DocumentListResponse(BaseModel):
     items: List[DocumentResponse]
 
 
+def get_user_document_permission(db: Session, document_id: int, user_id: int) -> tuple:
+    """
+    检查用户对文档的权限
+    返回 (权限级别: str, 是否是创建者: bool)
+    """
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        return None, False
+
+    # 创建者拥有所有权限
+    if document.creator_id == user_id:
+        return "owner", True
+
+    # 检查是否有授权权限
+    permission = db.query(DocumentPermission).filter(
+        DocumentPermission.document_id == document_id,
+        DocumentPermission.user_id == user_id
+    ).first()
+
+    if permission:
+        return permission.permission_level.value, False
+
+    return None, False
+
+
 @router.get("", response_model=DocumentListResponse)
 async def get_documents(
     page: int = 1,
@@ -84,34 +112,92 @@ async def get_documents(
     current_user: User = Depends(get_current_user)
 ):
     """
-    获取文档列表（分页）
-    
+    获取文档列表（分页）- 只返回用户有权限访问的文档
+
     @input page - 页码，从 1 开始
     @input page_size - 每页数量
     @input db - 数据库会话
     @input current_user - 当前登录用户
-    @process 1. 查询文档总数
+    @process 1. 查询用户有权限访问的文档
     #          2. 分页查询文档列表
     @output 返回文档列表和总数
     """
     # 计算偏移量
     offset = (page - 1) * page_size
-    
+
+    # 1. 获取用户创建的文档ID
+    owned_doc_ids = db.query(Document.id).filter(
+        Document.creator_id == current_user.id
+    ).all()
+    owned_ids = [doc[0] for doc in owned_doc_ids]
+
+    # 2. 获取用户被授权的文档ID
+    perm_doc_ids = db.query(DocumentPermission.document_id).filter(
+        DocumentPermission.user_id == current_user.id
+    ).all()
+    shared_ids = [doc[0] for doc in perm_doc_ids]
+
+    # 3. 合并所有有权限访问的文档ID
+    all_accessible_ids = list(set(owned_ids + shared_ids))
+
+    if not all_accessible_ids:
+        return {
+            "total": 0,
+            "items": []
+        }
+
+    # 查询有权限访问的文档
+    query = db.query(Document).filter(Document.id.in_(all_accessible_ids))
+
     # 查询总数
-    total = db.query(Document).count()
-    
+    total = query.count()
+
     # 分页查询文档列表
     documents = (
-        db.query(Document)
+        query
         .order_by(Document.modified_time.desc())
         .offset(offset)
         .limit(page_size)
         .all()
     )
-    
+
+    # 为每个文档添加权限信息
+    result_items = []
+    for doc in documents:
+        # 判断用户权限
+        is_owner = doc.creator_id == current_user.id
+
+        if is_owner:
+            user_permission = "owner"
+        else:
+            # 检查用户是否被授权访问文档
+            permission = db.query(DocumentPermission).filter(
+                DocumentPermission.document_id == doc.id,
+                DocumentPermission.user_id == current_user.id
+            ).first()
+
+            if permission:
+                user_permission = permission.permission_level.value
+            else:
+                user_permission = "view"  # 默认只有查看权限
+
+        doc_dict = {
+            "id": doc.id,
+            "title": doc.title,
+            "content": doc.content,
+            "summary": doc.summary,
+            "creator_id": doc.creator_id,
+            "creator_name": doc.creator_name,
+            "created_at": doc.created_at,
+            "modified_time": doc.modified_time,
+            "user_permission": user_permission,
+            "is_owner": is_owner
+        }
+        result_items.append(doc_dict)
+
     return {
         "total": total,
-        "items": documents,
+        "items": result_items,
     }
 
 
@@ -123,20 +209,28 @@ async def get_document(
 ):
     """
     获取单个文档详情
-    
+
     @input document_id - 文档ID
     @input db - 数据库会话
     @input current_user - 当前登录用户
-    @output 返回文档详情，如果文档不存在则抛出异常
+    @output 返回文档详情，如果文档不存在或无权限则抛出异常
     """
     document = db.query(Document).filter(Document.id == document_id).first()
-    
+
     if not document:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="文档不存在",
         )
-    
+
+    # 检查权限
+    permission_level, is_owner = get_user_document_permission(db, document_id, current_user.id)
+    if permission_level is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="您没有权限访问此文档",
+        )
+
     return document
 
 
@@ -148,12 +242,13 @@ async def create_document(
 ):
     """
     创建新文档
-    
+
     @input document_data - 文档数据（标题和内容）
     @input db - 数据库会话
     @input current_user - 当前登录用户
     @process 1. 创建文档记录
-    #          2. 保存到数据库
+    #          2. 如果有权限配置，添加权限记录
+    #          3. 保存到数据库
     @output 返回新创建的文档
     """
     db_document = Document(
@@ -162,12 +257,36 @@ async def create_document(
         creator_id=current_user.id,
         creator_name=current_user.username,
     )
-    
+
     db.add(db_document)
+    db.flush()  # 获取文档ID
+
+    # 添加权限记录
+    if document_data.permissions:
+        for perm in document_data.permissions:
+            db_permission = DocumentPermission(
+                document_id=db_document.id,
+                user_id=perm.get("user_id"),
+                permission_level=PermissionLevel(perm.get("permission_level", "view")),
+                granted_by=current_user.id
+            )
+            db.add(db_permission)
+
     db.commit()
     db.refresh(db_document)
-    
-    return db_document
+
+    return {
+        "id": db_document.id,
+        "title": db_document.title,
+        "content": db_document.content,
+        "summary": db_document.summary,
+        "creator_id": db_document.creator_id,
+        "creator_name": db_document.creator_name,
+        "created_at": db_document.created_at,
+        "modified_time": db_document.modified_time,
+        "user_permission": "owner",
+        "is_owner": True
+    }
 
 
 @router.put("/{document_id}", response_model=DocumentResponse)
@@ -179,30 +298,39 @@ async def update_document(
 ):
     """
     更新文档
-    
+
     @input document_id - 文档ID
     @input document_data - 要更新的文档数据
     @input db - 数据库会话
     @input current_user - 当前登录用户
     @process 1. 查询文档是否存在
-    #          2. 检查权限（只有创建者可以修改）
+    #          2. 检查权限（只有创建者或编辑者可修改）
     #          3. 更新文档信息
     @output 返回更新后的文档
     """
     print(f"[API] 更新文档请求: document_id={document_id}, user={current_user.username}")
     print(f"[API] document_data: {document_data}")
-    
+
     document = db.query(Document).filter(Document.id == document_id).first()
-    
+
     if not document:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="文档不存在",
         )
-    
-    # 协作编辑：允许任何登录用户编辑文档
-    # （如果是协作文档，任何登录用户都可以编辑）
-    # 注意：如果需要更严格的权限控制，可以添加检查
+
+    # 检查权限：只有创建者或被授权的编辑者可以修改
+    permission_level, is_owner = get_user_document_permission(db, document_id, current_user.id)
+    if permission_level is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="您没有权限编辑此文档",
+        )
+    if permission_level == "view":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="您只有查看权限，无法编辑此文档",
+        )
     
     # 更新文档信息
     if document_data.title is not None:

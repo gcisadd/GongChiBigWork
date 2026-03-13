@@ -54,6 +54,12 @@ const router = createRouter({
       // 协作编辑页面路由
       component: () => import('../views/CollabEditorView.vue'),
     },
+    {
+      path: '/friends',
+      name: 'friends',
+      // 好友管理页面路由
+      component: () => import('../views/FriendView.vue'),
+    },
   ],
 })
 

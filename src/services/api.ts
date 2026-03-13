@@ -203,9 +203,10 @@ export const documentApi = {
    * @param {Object} documentData - 文档数据
    * @param {string} documentData.title - 文档标题
    * @param {string} [documentData.content] - 文档内容（HTML 格式）
+   * @param {Array} [documentData.permissions] - 权限列表
    * @returns {Promise} 新创建的文档
    */
-  createDocument: async (documentData: { title: string; content?: string }) => {
+  createDocument: async (documentData: { title: string; content?: string; permissions?: Array<{user_id: number, permission_level: string}> }) => {
     const response = await api.post('/api/documents', documentData)
     return response.data
   },
@@ -286,6 +287,198 @@ export const profileApi = {
    */
   updateProfile: async (profileData: { phone?: string; bio?: string }) => {
     const response = await api.put('/api/profile', profileData)
+    return response.data
+  },
+}
+
+/**
+ * 好友管理相关 API
+ */
+export const friendApi = {
+  /**
+   * 搜索用户
+   *
+   * @param {string} q - 搜索关键词
+   * @returns {Promise} 匹配的用户列表
+   */
+  searchUsers: async (q: string) => {
+    const response = await api.get('/api/friends/search', { params: { q } })
+    return response.data
+  },
+
+  /**
+   * 获取好友列表
+   *
+   * @returns {Promise} 好友列表
+   */
+  getFriends: async () => {
+    const response = await api.get('/api/friends/friends')
+    return response.data
+  },
+
+  /**
+   * 获取收到的好友请求列表
+   *
+   * @returns {Promise} 收到的好友请求列表
+   */
+  getReceivedRequests: async () => {
+    const response = await api.get('/api/friends/requests/received')
+    return response.data
+  },
+
+  /**
+   * 获取发送的好友请求列表
+   *
+   * @returns {Promise} 发送的好友请求列表
+   */
+  getSentRequests: async () => {
+    const response = await api.get('/api/friends/requests/sent')
+    return response.data
+  },
+
+  /**
+   * 发送好友请求
+   *
+   * @param {string} username - 目标用户名
+   * @returns {Promise} 操作结果
+   */
+  sendFriendRequest: async (username: string) => {
+    const response = await api.post('/api/friends/request', { username })
+    return response.data
+  },
+
+  /**
+   * 接受好友请求
+   *
+   * @param {number} requestId - 好友请求ID
+   * @returns {Promise} 操作结果
+   */
+  acceptFriendRequest: async (requestId: number) => {
+    const response = await api.post(`/api/friends/request/${requestId}/accept`)
+    return response.data
+  },
+
+  /**
+   * 拒绝好友请求
+   *
+   * @param {number} requestId - 好友请求ID
+   * @returns {Promise} 操作结果
+   */
+  rejectFriendRequest: async (requestId: number) => {
+    const response = await api.post(`/api/friends/request/${requestId}/reject`)
+    return response.data
+  },
+
+  /**
+   * 删除好友
+   *
+   * @param {number} friendId - 好友ID
+   * @returns {Promise} 操作结果
+   */
+  removeFriend: async (friendId: number) => {
+    const response = await api.delete(`/api/friends/friend/${friendId}`)
+    return response.data
+  },
+
+  /**
+   * 取消发送的好友请求
+   *
+   * @param {number} requestId - 好友请求ID
+   * @returns {Promise} 操作结果
+   */
+  cancelFriendRequest: async (requestId: number) => {
+    const response = await api.delete(`/api/friends/request/${requestId}`)
+    return response.data
+  },
+}
+
+/**
+ * 文档权限管理相关 API
+ */
+export const permissionApi = {
+  /**
+   * 获取当前用户有权限访问的文档列表
+   *
+   * @returns {Promise} 文档列表（包含权限信息）
+   */
+  getAccessibleDocuments: async () => {
+    const response = await api.get('/api/documents')
+    return response.data
+  },
+
+  /**
+   * 获取文档的权限列表
+   *
+   * @param {number} documentId - 文档ID
+   * @returns {Promise} 权限列表
+   */
+  getDocumentPermissions: async (documentId: number) => {
+    const response = await api.get(`/api/documents/${documentId}/permissions`)
+    return response.data
+  },
+
+  /**
+   * 为文档添加权限
+   *
+   * @param {number} documentId - 文档ID
+   * @param {Object} permissionData - 权限数据
+   * @param {number} permissionData.user_id - 被授权用户ID
+   * @param {string} permissionData.permission_level - 权限级别：'view' 或 'edit'
+   * @returns {Promise} 操作结果
+   */
+  addDocumentPermission: async (
+    documentId: number,
+    permissionData: { user_id: number; permission_level: string }
+  ) => {
+    const response = await api.post(
+      `/api/documents/${documentId}/permissions`,
+      permissionData
+    )
+    return response.data
+  },
+
+  /**
+   * 更新文档权限
+   *
+   * @param {number} documentId - 文档ID
+   * @param {number} userId - 被授权用户ID
+   * @param {string} permissionLevel - 权限级别：'view' 或 'edit'
+   * @returns {Promise} 操作结果
+   */
+  updateDocumentPermission: async (
+    documentId: number,
+    userId: number,
+    permissionLevel: string
+  ) => {
+    const response = await api.put(
+      `/api/documents/${documentId}/permissions/${userId}`,
+      { permission_level: permissionLevel }
+    )
+    return response.data
+  },
+
+  /**
+   * 撤销文档权限
+   *
+   * @param {number} documentId - 文档ID
+   * @param {number} userId - 被授权用户ID
+   * @returns {Promise} 操作结果
+   */
+  revokeDocumentPermission: async (documentId: number, userId: number) => {
+    const response = await api.delete(
+      `/api/documents/${documentId}/permissions/${userId}`
+    )
+    return response.data
+  },
+
+  /**
+   * 检查当前用户对文档的访问权限级别
+   *
+   * @param {number} documentId - 文档ID
+   * @returns {Promise} 权限级别信息
+   */
+  checkDocumentAccess: async (documentId: number) => {
+    const response = await api.get(`/api/documents/${documentId}/access`)
     return response.data
   },
 }

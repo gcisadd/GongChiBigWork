@@ -15,6 +15,11 @@
             <el-icon><Document /></el-icon>
             <span>文档列表</span>
           </el-menu-item>
+          <!-- 好友管理菜单项 -->
+          <el-menu-item index="/friends">
+            <el-icon><User /></el-icon>
+            <span>好友管理</span>
+          </el-menu-item>
           <!-- Markdown 编辑器菜单项 -->
           <el-menu-item index="/editor">
             <el-icon><Edit /></el-icon>
@@ -68,6 +73,11 @@
                 class="title-input"
                 clearable
               />
+
+              <!-- 好友权限选择组件 - 仅在新建文档时显示 -->
+              <div v-if="!documentId" class="friend-permission-section">
+                <FriendSelect v-model="selectedFriends" />
+              </div>
 
               <!-- Markdown 编辑器 -->
               <!-- 富文本编辑器 -->
@@ -132,6 +142,7 @@ import { ElMessage } from 'element-plus'
 import html2pdf from 'html2pdf.js'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import FriendSelect from '../components/FriendSelect.vue'
 import { documentApi } from '../services/api'
 
 /**
@@ -189,6 +200,14 @@ const aiSummarizing = ref<boolean>(false)
 
 // 文档 ID（用于编辑已有文档）
 const documentId = ref<number | null>(null)
+
+// 选中的好友及其权限
+interface SelectedFriend {
+  friend_id: number
+  friend_username: string
+  permission_level: string
+}
+const selectedFriends = ref<SelectedFriend[]>([])
 
 // 编辑器引用
 const editorRef = ref()
@@ -302,9 +321,16 @@ const handleSave = async () => {
       ElMessage.success('文档更新成功')
     } else {
       console.log('[保存] 创建新文档')
+      // 准备权限数据
+      const permissions = selectedFriends.value.map(friend => ({
+        user_id: friend.friend_id,
+        permission_level: friend.permission_level
+      }))
+
       const result = await documentApi.createDocument({
         title: title.value,
         content: content.value,
+        permissions: permissions.length > 0 ? permissions : undefined
       })
       console.log('[保存] 文档创建成功, result:', result)
       documentId.value = result.id
@@ -635,6 +661,14 @@ onMounted(async () => {
 /* 标题输入框样式 */
 .title-input {
   margin-bottom: 12px;
+}
+
+/* 好友权限选择区域样式 */
+.friend-permission-section {
+  margin-bottom: 12px;
+  padding: 12px;
+  background-color: #f5f7fa;
+  border-radius: 4px;
 }
 
 /* 富文本编辑器样式 */

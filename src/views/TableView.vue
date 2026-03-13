@@ -4,16 +4,16 @@
     <el-container class="layout-container">
       <!-- 左侧导航栏区域 -->
       <el-aside width="200px" class="aside-container">
-        <el-menu
-          :default-active="activeMenu"
-          class="aside-menu"
-          router
-          @select="handleMenuSelect"
-        >
+        <el-menu :default-active="activeMenu" class="aside-menu" router @select="handleMenuSelect">
           <!-- 导航菜单项 -->
           <el-menu-item index="/table">
             <el-icon><Document /></el-icon>
             <span>文档列表</span>
+          </el-menu-item>
+          <!-- 好友管理菜单项 -->
+          <el-menu-item index="/friends">
+            <el-icon><User /></el-icon>
+            <span>好友管理</span>
           </el-menu-item>
           <!-- 富文本编辑器菜单项 -->
           <el-menu-item index="/editor">
@@ -30,88 +30,193 @@
 
       <!-- 右侧主内容区域 -->
       <el-main class="main-container">
-    <!-- 表格页面标题 -->
-    <el-card class="table-card" shadow="always">
-      <template #header>
-        <div class="card-header">
-          <h2>文档列表</h2>
-          <el-button type="primary" :icon="Plus" @click="handleAdd">新建文档</el-button>
-        </div>
-      </template>
+        <!-- 表格页面标题 -->
+        <el-card class="table-card" shadow="always">
+          <template #header>
+            <div class="card-header">
+              <h2>文档列表</h2>
+              <el-button type="primary" :icon="Plus" @click="handleAdd">新建文档</el-button>
+            </div>
+          </template>
 
-      <!-- 表格操作栏 -->
-      <div class="table-toolbar">
-        <el-button type="danger" :icon="Delete" :disabled="selectedRows.length === 0" @click="handleDelete">
-          批量删除
-        </el-button>
-        <el-button type="success" :icon="Refresh" @click="handleRefresh">刷新</el-button>
-      </div>
-
-      <!-- 数据表格 -->
-      <el-table
-        :data="tableData"
-        class="document-table"
-        style="width: 100%"
-        border
-        stripe
-        size="large"
-        @selection-change="handleSelectionChange"
-      >
-        <!-- 选择列：适当减小固定宽度，避免占用过多空间 -->
-        <el-table-column type="selection" width="60" />
-        <!-- 其余列使用 min-width，由表格自动按剩余空间等比拉伸，铺满整行 -->
-        <el-table-column prop="id" label="文档ID" min-width="100" />
-        <el-table-column prop="title" label="文档名" min-width="200" />
-        <el-table-column prop="creator_name" label="创建者" min-width="150" />
-        <el-table-column prop="modified_time" label="修改时间" min-width="200" />
-        <el-table-column label="操作" min-width="200" fixed="right">
-          <template #default="scope">
-            <el-button
-              type="primary"
-              size="large"
-              :icon="Connection"
-              class="action-button"
-              @click="handleCollabEdit(scope.row)"
-            >
-              协作编辑
-            </el-button>
+          <!-- 表格操作栏 -->
+          <div class="table-toolbar">
             <el-button
               type="danger"
-              size="large"
               :icon="Delete"
-              class="action-button"
-              @click="handleDeleteRow(scope.row)"
+              :disabled="selectedRows.length === 0"
+              @click="handleDelete"
             >
-              删除
+              批量删除
             </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+            <el-button type="success" :icon="Refresh" @click="handleRefresh">刷新</el-button>
+          </div>
 
-      <!-- 分页组件 -->
-      <div class="pagination-container">
-        <el-pagination
-          v-model:current-page="currentPage"
-          v-model:page-size="pageSize"
-          :page-sizes="[10, 20, 50, 100]"
-          :total="total"
-          layout="total, sizes, prev, pager, next, jumper"
-          @size-change="handleSizeChange"
-          @current-change="handleCurrentChange"
-        />
-      </div>
-    </el-card>
+          <!-- 数据表格 -->
+          <el-table
+            :data="tableData"
+            class="document-table"
+            style="width: 100%"
+            border
+            stripe
+            size="large"
+            @selection-change="handleSelectionChange"
+          >
+            <!-- 选择列：适当减小固定宽度，避免占用过多空间 -->
+            <el-table-column type="selection" width="60" />
+            <!-- 其余列使用 min-width，由表格自动按剩余空间等比拉伸，铺满整行 -->
+            <el-table-column prop="id" label="文档ID" min-width="100" />
+            <el-table-column prop="title" label="文档名" min-width="200" />
+            <el-table-column prop="creator_name" label="创建者" min-width="150" />
+            <el-table-column prop="modified_time" label="修改时间" min-width="200" />
+            <el-table-column label="权限" min-width="100">
+              <template #default="{ row }">
+                <el-tag v-if="row.is_owner" type="success" size="small">所有者</el-tag>
+                <el-tag v-else-if="row.user_permission === 'edit'" type="warning" size="small"
+                  >可编辑</el-tag
+                >
+                <el-tag v-else type="info" size="small">可查看</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" min-width="280" fixed="right">
+              <template #default="scope">
+                <el-button
+                  v-if="scope.row.is_owner"
+                  type="success"
+                  size="large"
+                  :icon="Key"
+                  class="action-button"
+                  @click="handleManagePermissions(scope.row)"
+                >
+                  权限管理
+                </el-button>
+                <el-button
+                  type="primary"
+                  size="large"
+                  :icon="Connection"
+                  class="action-button"
+                  @click="handleCollabEdit(scope.row)"
+                >
+                  协作编辑
+                </el-button>
+                <el-button
+                  type="danger"
+                  size="large"
+                  :icon="Delete"
+                  class="action-button"
+                  @click="handleDeleteRow(scope.row)"
+                >
+                  删除
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+
+          <!-- 分页组件 -->
+          <div class="pagination-container">
+            <el-pagination
+              v-model:current-page="currentPage"
+              v-model:page-size="pageSize"
+              :page-sizes="[10, 20, 50, 100]"
+              :total="total"
+              layout="total, sizes, prev, pager, next, jumper"
+              @size-change="handleSizeChange"
+              @current-change="handleCurrentChange"
+            />
+          </div>
+        </el-card>
+
+        <!-- 权限管理对话框 -->
+        <el-dialog
+          v-model="permissionDialogVisible"
+          :title="`权限管理 - ${currentDocument?.title}`"
+          width="600px"
+        >
+          <div class="permission-dialog-content">
+            <!-- 添加权限区域 -->
+            <div class="add-permission-section">
+              <el-select
+                v-model="selectedFriendId"
+                placeholder="选择好友"
+                filterable
+                clearable
+                class="friend-select"
+              >
+                <el-option
+                  v-for="friend in availableFriends"
+                  :key="friend.friend_id"
+                  :label="friend.friend_username"
+                  :value="friend.friend_id"
+                />
+              </el-select>
+              <el-select
+                v-model="newPermissionLevel"
+                placeholder="权限级别"
+                class="permission-level-select"
+              >
+                <el-option label="仅查看" value="view" />
+                <el-option label="可编辑" value="edit" />
+              </el-select>
+              <el-button
+                type="primary"
+                :disabled="!selectedFriendId || !newPermissionLevel"
+                @click="handleAddPermission"
+              >
+                添加权限
+              </el-button>
+            </div>
+
+            <!-- 权限列表 -->
+            <el-table :data="permissionList" border class="permission-table">
+              <el-table-column label="用户" prop="username" />
+              <el-table-column label="权限">
+                <template #default="scope">
+                  <el-select
+                    :model-value="scope.row.permission_level"
+                    size="small"
+                    @change="(val: string) => handleUpdatePermission(scope.row.user_id, val)"
+                  >
+                    <el-option label="仅查看" value="view" />
+                    <el-option label="可编辑" value="edit" />
+                  </el-select>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="100">
+                <template #default="scope">
+                  <el-button
+                    type="danger"
+                    size="small"
+                    @click="handleRevokePermission(scope.row.user_id)"
+                  >
+                    移除
+                  </el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+
+            <el-empty v-if="permissionList.length === 0" description="暂无权限设置" />
+          </div>
+        </el-dialog>
       </el-main>
     </el-container>
   </div>
 </template>
 
 <script setup lang="ts">
-import { Connection, Delete, Document, Edit, Plus, Refresh, User } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { documentApi } from '../services/api'
+import {
+  Connection,
+  Delete,
+  Document,
+  Edit,
+  Key,
+  Plus,
+  Refresh,
+  User,
+} from "@element-plus/icons-vue";
+import { ElMessage, ElMessageBox } from "element-plus";
+import { onMounted, ref } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { documentApi, friendApi, permissionApi } from "../services/api";
 /**
  * 文档列表页面组件
  *
@@ -129,35 +234,47 @@ import { documentApi } from '../services/api'
  * @property {string} title - 文档名
  * @property {string} creator - 创建者
  * @property {string} modifiedTime - 修改时间
+ * @property {string} user_permission - 用户权限级别
+ * @property {boolean} is_owner - 是否是创建者
  */
 interface DocumentRow {
-  id: number
-  title: string
-  creator_name: string
-  modified_time: string
+  id: number;
+  title: string;
+  creator_name: string;
+  modified_time: string;
+  user_permission: string;
+  is_owner: boolean;
 }
 
 // 路由实例，用于获取当前路由路径和执行页面跳转
-const route = useRoute()
-const router = useRouter()
+const route = useRoute();
+const router = useRouter();
 
 // 当前激活的菜单项
-const activeMenu = ref('/table')
+const activeMenu = ref("/table");
 
 // 文档列表数据
-const tableData = ref<DocumentRow[]>([])
+const tableData = ref<DocumentRow[]>([]);
 
 // 选中的行数据
-const selectedRows = ref<DocumentRow[]>([])
+const selectedRows = ref<DocumentRow[]>([]);
 
 // 当前页码
-const currentPage = ref(1)
+const currentPage = ref(1);
 
 // 每页显示数量
-const pageSize = ref(10)
+const pageSize = ref(10);
 
 // 数据总数
-const total = ref(0)
+const total = ref(0);
+
+// 权限管理相关变量
+const permissionDialogVisible = ref(false);
+const currentDocument = ref<DocumentRow | null>(null);
+const permissionList = ref<{ user_id: number; username: string; permission_level: string }[]>([]);
+const availableFriends = ref<{ friend_id: number; friend_username: string }[]>([]);
+const selectedFriendId = ref<number | null>(null);
+const newPermissionLevel = ref("view");
 
 /**
  * 格式化日期时间
@@ -167,14 +284,14 @@ const total = ref(0)
  * @output 格式化后的日期时间字符串
  */
 const formatDateTime = (date: Date): string => {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  const seconds = String(date.getSeconds()).padStart(2, '0')
-  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
-}
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+};
 
 /**
  * 加载文档列表数据
@@ -188,20 +305,20 @@ const formatDateTime = (date: Date): string => {
 const loadTableData = async () => {
   try {
     // 调用后端 API 获取文档列表
-    const response = await documentApi.getDocuments(currentPage.value, pageSize.value)
+    const response = await documentApi.getDocuments(currentPage.value, pageSize.value);
 
     // 更新表格数据
-    tableData.value = response.items || []
-    total.value = response.total || 0
+    tableData.value = response.items || [];
+    total.value = response.total || 0;
   } catch (error) {
-    console.error('加载文档列表失败:', error)
-    ElMessage.error('加载文档列表失败')
+    console.error("加载文档列表失败:", error);
+    ElMessage.error("加载文档列表失败");
 
     // 如果加载失败，使用空数组
-    tableData.value = []
-    total.value = 0
+    tableData.value = [];
+    total.value = 0;
   }
-}
+};
 
 /**
  * 初始化文档列表数据
@@ -211,8 +328,8 @@ const loadTableData = async () => {
  * @output 填充文档列表数据
  */
 const initTableData = () => {
-  loadTableData()
-}
+  loadTableData();
+};
 
 /**
  * 处理选择变化
@@ -223,8 +340,8 @@ const initTableData = () => {
  * @output 更新 selectedRows 数组
  */
 const handleSelectionChange = (selection: DocumentRow[]) => {
-  selectedRows.value = selection
-}
+  selectedRows.value = selection;
+};
 
 /**
  * 处理新建文档操作
@@ -235,8 +352,8 @@ const handleSelectionChange = (selection: DocumentRow[]) => {
  * @output 跳转到富文本编辑器页面
  */
 const handleAdd = () => {
-  router.push('/editor')
-}
+  router.push("/editor");
+};
 
 /**
  * 处理协作编辑操作
@@ -247,12 +364,12 @@ const handleAdd = () => {
  */
 const handleCollabEdit = (row: DocumentRow) => {
   router.push({
-    path: '/collab-editor',
+    path: "/collab-editor",
     query: {
       id: String(row.id),
     },
-  })
-}
+  });
+};
 
 /**
  * 处理删除单行操作
@@ -265,26 +382,160 @@ const handleCollabEdit = (row: DocumentRow) => {
  */
 const handleDeleteRow = async (row: DocumentRow) => {
   try {
-    await ElMessageBox.confirm(`确定要删除文档 "${row.title}" 吗？`, '提示', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
+    await ElMessageBox.confirm(`确定要删除文档 "${row.title}" 吗？`, "提示", {
+      confirmButtonText: "确定",
+      cancelButtonText: "取消",
+      type: "warning",
+    });
 
     // 调用后端 API 删除文档
-    await documentApi.deleteDocument(row.id)
+    await documentApi.deleteDocument(row.id);
 
     // 重新加载文档列表
-    await loadTableData()
+    await loadTableData();
 
-    ElMessage.success('删除成功')
+    ElMessage.success("删除成功");
   } catch (error) {
-    if (error !== 'cancel') {
-      console.error('删除文档失败:', error)
-      ElMessage.error('删除文档失败')
+    if (error !== "cancel") {
+      console.error("删除文档失败:", error);
+      ElMessage.error("删除文档失败");
     }
   }
-}
+};
+
+/**
+ * 处理权限管理操作
+ *
+ * @input 用户点击权限管理按钮
+ * @process 1. 设置当前文档
+ *          2. 加载权限列表
+ *          3. 加载好友列表
+ *          4. 打开权限管理对话框
+ * @output 显示权限管理对话框
+ */
+const handleManagePermissions = async (row: DocumentRow) => {
+  currentDocument.value = row;
+  permissionDialogVisible.value = true;
+
+  // 加载权限列表和好友列表
+  await Promise.all([loadPermissionList(row.id), loadAvailableFriends()]);
+};
+
+/**
+ * 加载权限列表
+ *
+ * @input 文档ID
+ * @process 调用后端 API 获取权限列表
+ * @output 更新权限列表
+ */
+const loadPermissionList = async (documentId: number) => {
+  try {
+    const response = await permissionApi.getDocumentPermissions(documentId);
+    permissionList.value = response.items || [];
+  } catch (error) {
+    console.error("加载权限列表失败:", error);
+    ElMessage.error("加载权限列表失败");
+  }
+};
+
+/**
+ * 加载可用好友列表
+ *
+ * @input 无
+ * @process 调用后端 API 获取好友列表
+ * @output 更新可用好友列表
+ */
+const loadAvailableFriends = async () => {
+  try {
+    const response = await friendApi.getFriends();
+    availableFriends.value = response.items || [];
+  } catch (error) {
+    console.error("加载好友列表失败:", error);
+    ElMessage.error("加载好友列表失败");
+  }
+};
+
+/**
+ * 添加权限
+ *
+ * @input 用户选择好友和权限级别
+ * @process 调用后端 API 添加权限
+ * @output 更新权限列表，显示成功消息
+ */
+const handleAddPermission = async () => {
+  if (!currentDocument.value || !selectedFriendId.value || !newPermissionLevel.value) {
+    return;
+  }
+
+  try {
+    await permissionApi.addDocumentPermission(currentDocument.value.id, {
+      user_id: selectedFriendId.value,
+      permission_level: newPermissionLevel.value,
+    });
+
+    ElMessage.success("添加权限成功");
+    await loadPermissionList(currentDocument.value.id);
+
+    // 重置选择
+    selectedFriendId.value = null;
+    newPermissionLevel.value = "view";
+  } catch (error) {
+    console.error("添加权限失败:", error);
+    ElMessage.error("添加权限失败");
+  }
+};
+
+/**
+ * 更新权限级别
+ *
+ * @input 用户选择新的权限级别
+ * @process 调用后端 API 更新权限
+ * @output 更新权限列表，显示成功消息
+ */
+const handleUpdatePermission = async (userId: number, permissionLevel: string) => {
+  if (!currentDocument.value) {
+    return;
+  }
+
+  try {
+    await permissionApi.updateDocumentPermission(currentDocument.value.id, userId, permissionLevel);
+    ElMessage.success("更新权限成功");
+    await loadPermissionList(currentDocument.value.id);
+  } catch (error) {
+    console.error("更新权限失败:", error);
+    ElMessage.error("更新权限失败");
+  }
+};
+
+/**
+ * 撤销权限
+ *
+ * @input 用户点击移除按钮
+ * @process 调用后端 API 撤销权限
+ * @output 更新权限列表，显示成功消息
+ */
+const handleRevokePermission = async (userId: number) => {
+  if (!currentDocument.value) {
+    return;
+  }
+
+  try {
+    await ElMessageBox.confirm("确定要移除该用户的权限吗？", "提示", {
+      confirmButtonText: "确定",
+      cancelButtonText: "取消",
+      type: "warning",
+    });
+
+    await permissionApi.revokeDocumentPermission(currentDocument.value.id, userId);
+    ElMessage.success("移除权限成功");
+    await loadPermissionList(currentDocument.value.id);
+  } catch (error) {
+    if (error !== "cancel") {
+      console.error("移除权限失败:", error);
+      ElMessage.error("移除权限失败");
+    }
+  }
+};
 
 /**
  * 处理批量删除操作
@@ -297,35 +548,35 @@ const handleDeleteRow = async (row: DocumentRow) => {
  */
 const handleDelete = async () => {
   if (selectedRows.value.length === 0) {
-    ElMessage.warning('请选择要删除的文档')
-    return
+    ElMessage.warning("请选择要删除的文档");
+    return;
   }
 
   try {
-    await ElMessageBox.confirm(`确定要删除选中的 ${selectedRows.value.length} 个文档吗？`, '提示', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
+    await ElMessageBox.confirm(`确定要删除选中的 ${selectedRows.value.length} 个文档吗？`, "提示", {
+      confirmButtonText: "确定",
+      cancelButtonText: "取消",
+      type: "warning",
+    });
 
     // 逐个删除选中的文档
     for (const row of selectedRows.value) {
-      await documentApi.deleteDocument(row.id)
+      await documentApi.deleteDocument(row.id);
     }
 
     // 重新加载文档列表
-    await loadTableData()
+    await loadTableData();
 
     // 清空选中状态
-    selectedRows.value = []
-    ElMessage.success('批量删除成功')
+    selectedRows.value = [];
+    ElMessage.success("批量删除成功");
   } catch (error) {
-    if (error !== 'cancel') {
-      console.error('批量删除失败:', error)
-      ElMessage.error('批量删除失败，请稍后重试')
+    if (error !== "cancel") {
+      console.error("批量删除失败:", error);
+      ElMessage.error("批量删除失败，请稍后重试");
     }
   }
-}
+};
 
 /**
  * 处理刷新操作
@@ -336,10 +587,10 @@ const handleDelete = async () => {
  * @output 刷新文档列表数据
  */
 const handleRefresh = () => {
-  currentPage.value = 1
-  loadTableData()
-  ElMessage.success('刷新成功')
-}
+  currentPage.value = 1;
+  loadTableData();
+  ElMessage.success("刷新成功");
+};
 
 /**
  * 处理每页显示数量变化
@@ -350,10 +601,10 @@ const handleRefresh = () => {
  * @output 更新表格显示
  */
 const handleSizeChange = (size: number) => {
-  pageSize.value = size
-  currentPage.value = 1
-  loadTableData()
-}
+  pageSize.value = size;
+  currentPage.value = 1;
+  loadTableData();
+};
 
 /**
  * 处理页码变化
@@ -364,9 +615,9 @@ const handleSizeChange = (size: number) => {
  * @output 更新表格显示
  */
 const handleCurrentChange = (page: number) => {
-  currentPage.value = page
-  loadTableData()
-}
+  currentPage.value = page;
+  loadTableData();
+};
 
 /**
  * 处理菜单选择
@@ -377,8 +628,8 @@ const handleCurrentChange = (page: number) => {
  * @output 更新激活菜单状态
  */
 const handleMenuSelect = (index: string) => {
-  activeMenu.value = index
-}
+  activeMenu.value = index;
+};
 
 /**
  * 组件挂载时初始化数据
@@ -390,9 +641,9 @@ const handleMenuSelect = (index: string) => {
  */
 onMounted(() => {
   // 根据当前路由设置激活的菜单项
-  activeMenu.value = route.path
-  initTableData()
-})
+  activeMenu.value = route.path;
+  initTableData();
+});
 </script>
 
 <style scoped>
@@ -481,4 +732,29 @@ onMounted(() => {
   margin-left: 8px;
 }
 
+/* 权限管理对话框内容样式 */
+.permission-dialog-content {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+/* 添加权限区域样式 */
+.add-permission-section {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.friend-select {
+  flex: 1;
+}
+
+.permission-level-select {
+  width: 120px;
+}
+
+/* 权限表格样式 */
+.permission-table {
+  margin-top: 10px;
+}
 </style>

@@ -7,7 +7,7 @@ FastAPI 主应用入口文件
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, documents, profile, websocket
+from app.api import auth, documents, profile, websocket, friends, document_permissions
 from app.core.config import settings
 from app.db.database import engine
 from app.db.models import Base
@@ -38,6 +38,8 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/auth", tags=["认证"])
 app.include_router(documents.router, prefix="/api/documents", tags=["文档管理"])
 app.include_router(profile.router, prefix="/api/profile", tags=["个人信息"])
+app.include_router(friends.router, prefix="/api/friends", tags=["好友管理"])
+app.include_router(document_permissions.router, prefix="/api/documents", tags=["文档权限"])
 # WebSocket 路由单独注册（不需要 prefix）
 app.include_router(websocket.router)
 
