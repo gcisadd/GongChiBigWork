@@ -87,23 +87,6 @@
               <!-- 评论区域 -->
               <CommentSection v-if="documentId" :document-id="Number(documentId)" />
             </div>
-
-            <!-- 右侧预览区域 -->
-            <div class="preview-wrapper">
-              <div class="preview-header">
-                <span class="preview-title">实时预览</span>
-                <el-tag type="info" size="small">只读</el-tag>
-              </div>
-              <!-- 预览标题 -->
-              <h3 class="preview-document-title">
-                {{ title || '（未命名文档）' }}
-              </h3>
-              <!-- 预览内容区域 -->
-              <div
-                class="preview-content markdown-body"
-                v-html="renderedContent"
-              />
-            </div>
           </div>
         </el-card>
       </el-main>
@@ -602,17 +585,6 @@ onMounted(async () => {
   min-height: 0;
 }
 
-.preview-wrapper {
-  flex: 1;
-  margin-top: 0;
-  padding: 16px;
-  background-color: #fafafa;
-  border-radius: 6px;
-  border: 1px solid #ebeef5;
-  height: 100%;
-  overflow-y: hidden;
-}
-
 /* 标题输入框样式 */
 .title-input {
   margin-bottom: 12px;
@@ -634,32 +606,6 @@ onMounted(async () => {
 
 .rich-text-editor :deep(.ql-container) {
   height: calc(100% - 42px);
-}
-
-.preview-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.preview-title {
-  font-size: 14px;
-  color: #606266;
-}
-
-.preview-document-title {
-  margin: 4px 0 12px;
-  font-size: 18px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.preview-content {
-  min-height: 120px;
-  font-size: 14px;
-  color: #303133;
-  line-height: 1.6;
 }
 
 /* Markdown 渲染样式 */
@@ -794,12 +740,6 @@ onMounted(async () => {
   padding: 0;
 }
 
-/* 让预览区内的图片自适应宽度，避免撑破布局 */
-.preview-content img {
-  max-width: 100%;
-  height: auto;
-}
-
 /* AI 概括区域样式 */
 .ai-summary-section {
   margin-top: 16px;
@@ -838,10 +778,6 @@ onMounted(async () => {
 
   .editor-content {
     flex-direction: column;
-  }
-
-  .preview-wrapper {
-    max-height: none;
   }
 }
 </style>

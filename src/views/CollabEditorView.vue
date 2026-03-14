@@ -1463,48 +1463,6 @@ onUnmounted(async () => {
   }
 }
 
-/* 预览区域 */
-.preview-wrapper {
-  flex: 1;
-  margin-top: 0;
-  padding: 16px;
-  background-color: #fafafa;
-  border-radius: 6px;
-  border: 1px solid #ebeef5;
-  max-height: 500px;
-  overflow-y: auto;
-}
-
-.preview-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.preview-title {
-  font-size: 14px;
-  color: #606266;
-}
-
-.preview-document-title {
-  margin: 4px 0 12px;
-  font-size: 18px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.preview-content {
-  min-height: 120px;
-  font-size: 14px;
-  color: #303133;
-}
-
-.preview-content img {
-  max-width: 100%;
-  height: auto;
-}
-
 /* 响应式设计 */
 @media (max-width: 768px) {
   .main-container {
